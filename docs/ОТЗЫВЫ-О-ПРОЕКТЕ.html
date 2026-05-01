@@ -220,7 +220,7 @@
 
   <h1>Отзывы и аналитика — Арбитражная стратегия</h1>
   <p class="subtitle">Честный разбор уроков опытного трейдера (15+ лет арбитража). Обновляется после каждого урока.</p>
-  <p class="updated">Обновлено: 2026-05-02 — все 3 урока обработаны ✅</p>
+  <p class="updated">Обновлено: 2026-05-02 (урок 04)</p>
 
   <div class="course-summary" style="margin-top:18px;">
     <h2>Об источнике материала</h2>
@@ -233,8 +233,8 @@
   <!-- ===== ПРОГРЕСС ===== -->
   <div class="summary-card">
     <h3>📊 Прогресс обработки</h3>
-    <div class="progress-label">Уроки обработаны: 3 / 3 ✅</div>
-    <div class="progress-bar-wrap"><div class="progress-bar" style="width:100%"></div></div>
+    <div class="progress-label">Уроки обработаны: 4 / ?</div>
+    <div class="progress-bar-wrap"><div class="progress-bar" style="width:40%"></div></div>
   </div>
 
   <div class="lesson-card">
@@ -345,6 +345,58 @@
       <div class="verdict-box">
         <strong>Вывод:</strong> Ключевой урок всего курса — полная стратегия межбиржевого арбитража. Три урока дают законченную картину: макроконтекст → механика стакана → <strong>полноценный арбитраж</strong>. Можно приступать к разработке бота.
         <br><strong>Применимость:</strong> <span class="tag-ok">Очень высокая</span>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="lesson-card">
+    <div class="lesson-header">
+      <span class="lesson-num">Урок 04</span>
+      <span class="lesson-title">Топ 7 Приложений Трейдера. Какие нужно изучать</span>
+    </div>
+    <p class="lesson-desc">Полный рабочий фреймворк: TradingView, CScalp, MT5, Telegram-скринер. Что заменяет бот, что остаётся ручным.</p>
+    <div class="lesson-body">
+
+      <div class="info">
+        <div class="section-label">📊 Ключевые параметры</div>
+        <ul>
+          <li>TradingView: <strong>$150–180</strong> по скидкам / <strong>$480</strong> без скидки</li>
+          <li>CScalp/Metascalp: API к <strong>~15 биржам</strong> второго и третьего эшелона</li>
+          <li>Трейдинг = <strong>«$1 × 1 000 000 раз»</strong>, не поиск «1000 иксов»</li>
+          <li>Дневник трейдера в арбитраже: <strong>не нужен</strong></li>
+        </ul>
+      </div>
+
+      <div class="plus">
+        <div class="section-label">✅ Плюсы</div>
+        <ul>
+          <li>Полная картина экосистемы — понятно что строить, что уже готово</li>
+          <li>Чёткое разделение: бот заменяет CScalp и Telegram-скринер <strong>полностью</strong></li>
+          <li>Telegram API = канал уведомлений бота — приоритет при разработке</li>
+        </ul>
+      </div>
+
+      <div class="minus">
+        <div class="section-label">❌ Ограничения</div>
+        <ul>
+          <li>Урок обзорный — нет новой механики торговли</li>
+          <li>Стоимость и доступность большинства инструментов не уточнена</li>
+        </ul>
+      </div>
+
+      <div class="info">
+        <div class="section-label">📌 Что добавить в бота</div>
+        <ul>
+          <li><code>python-telegram-bot</code> / <code>aiogram</code> → уведомления о сигналах и сделках</li>
+          <li><code>fetch_balance()</code> → мониторинг балансов на всех биржах автоматически</li>
+          <li>Бот = CScalp + скринер + Telegram в одном процессе</li>
+        </ul>
+      </div>
+
+      <div class="verdict-box">
+        <strong>Вывод:</strong> Главный инсайт — <strong>бот должен заменить CScalp и Telegram-скринер</strong>. Это два ключевых ручных инструмента. TradingView и переводы остаются ручными.
+        <br><strong>Применимость:</strong> <span class="tag-warn">Средняя</span> (обзорный урок)
       </div>
 
     </div>
