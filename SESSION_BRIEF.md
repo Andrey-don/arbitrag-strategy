@@ -5,7 +5,7 @@ updated: 2026-05-01
 # SESSION BRIEF — Арбитражный бот (читать первым)
 
 > Этот файл обновляется в конце каждой сессии.
-> Claude: прочитай ТОЛЬКО этот файл в начале. Не читай проект — спроси пользователя что делаем.
+> Claude: прочитай ТОЛЬКО этот файл в начале. Не читай весь проект — спроси что делаем.
 
 ---
 
@@ -19,51 +19,31 @@ updated: 2026-05-01
 
 | Этап | Статус |
 |------|--------|
-| Структура проекта | ✅ Создана, запушена на GitHub |
-| Загрузка транскрибаций в NotebookLM | ⏳ Ожидание от пользователя |
-| Обработка уроков (docs/) | ⬜ Не начато |
+| Структура проекта + Obsidian vault | ✅ Созданы |
+| Транскрибации загружены в NotebookLM | ⏳ Ожидание от пользователя |
+| Обработка уроков → конспекты | ⬜ Не начато |
 | Разработка бота (src/) | ⬜ Не начато |
 
-## Что сделано за эту сессию
+## Что сделано
 
-- [x] Инициализирован git-репозиторий
-- [x] Создана структура проекта (src/, docs/, для_notebooklm/, data/, logs/, reports/)
-- [x] Написан промпт для NotebookLM (docs/LLM_обработка_уроков.md)
-- [x] Настроены CLAUDE.md, .gitignore, requirements.txt, .env.example
-- [x] Первый коммит запушен: https://github.com/Andrey-don/arbitrag-strategy
+- [x] git-репозиторий создан, запушен: https://github.com/Andrey-don/arbitrag-strategy
+- [x] Obsidian vault создан: C:\AI-Clone\Brain\01-Projects\Arbitrag-Bot\
+- [x] 00-Главная, SESSION_BRIEF, 01-Карта-Курса, 02-Шаблоны-Кода, ПРОМПТ, ОТЗЫВЫ
 
 ## Следующий шаг
 
-1. Пользователь загружает транскрибации (.txt) в `для_notebooklm/` и в https://notebooklm.google.com/
-2. Обработать каждую транскрибацию промптом из `docs/LLM_обработка_уроков.md`
-3. Сохранить результат в `docs/модуль_01_арбитраж/урок_01_[тема].md`
-4. Обновить статус в `docs/карта_курса.md`
+1. Пользователь загружает транскрибации → https://notebooklm.google.com/
+2. Обработать промптом из Obsidian: ПРОМПТ-ДЛЯ-NOTEBOOKLM.md
+3. Сохранить конспект в Obsidian vault (плоско: `урок_01_тема.md`)
+4. Скопировать также в проект: `docs/урок_01_тема.md`
+5. Обновить 01-Карта-Курса.md и 00-Главная.md
 
 ---
 
 ## Ключевые пути
 
 ```
-Проект:        C:\Users\profi\Documents\Project\arbitrag-strategy\
-Конспекты:     C:\Users\profi\Documents\Project\arbitrag-strategy\docs\модуль_01_арбитраж\
-Транскрибации: C:\Users\profi\Documents\Project\arbitrag-strategy\для_notebooklm\
-GitHub:        https://github.com/Andrey-don/arbitrag-strategy
-NotebookLM:    https://notebooklm.google.com/
+Проект:     C:\Users\profi\Documents\Project\arbitrag-strategy\
+Obsidian:   C:\AI-Clone\Brain\01-Projects\Arbitrag-Bot\
+GitHub:     https://github.com/Andrey-don/arbitrag-strategy
 ```
-
-## Навигация
-
-- `docs/карта_курса.md` — статус всех уроков
-- `docs/шаблоны_кода.md` — готовые шаблоны Python для арбитража
-- `docs/LLM_обработка_уроков.md` — промпт для NotebookLM
-- `docs/модуль_01_арбитраж/` — конспекты уроков
-
----
-
-## Инструкция для Claude (начало сессии)
-
-1. Прочитай этот файл (SESSION_BRIEF.md) — **только его**
-2. Скажи пользователю: что сделано и какой следующий шаг
-3. Спроси: "Продолжаем или есть новая задача?"
-4. Читай другие файлы только по конкретному запросу
-5. В конце сессии: обнови этот файл, сделай git commit + push
