@@ -220,7 +220,7 @@
 
   <h1>Отзывы и аналитика — Арбитражная стратегия</h1>
   <p class="subtitle">Честный разбор уроков опытного трейдера (15+ лет арбитража). Обновляется после каждого урока.</p>
-  <p class="updated">Обновлено: 2026-05-02 (урок 02)</p>
+  <p class="updated">Обновлено: 2026-05-02 — все 3 урока обработаны ✅</p>
 
   <div class="course-summary" style="margin-top:18px;">
     <h2>Об источнике материала</h2>
@@ -233,8 +233,8 @@
   <!-- ===== ПРОГРЕСС ===== -->
   <div class="summary-card">
     <h3>📊 Прогресс обработки</h3>
-    <div class="progress-label">Уроки обработаны: 2 / 3</div>
-    <div class="progress-bar-wrap"><div class="progress-bar" style="width:66%"></div></div>
+    <div class="progress-label">Уроки обработаны: 3 / 3 ✅</div>
+    <div class="progress-bar-wrap"><div class="progress-bar" style="width:100%"></div></div>
   </div>
 
   <div class="lesson-card">
@@ -288,6 +288,63 @@
       <div class="verdict-box">
         <strong>Вывод:</strong> Самый прикладной урок — прямая механика будущего бота. Трейдер сам говорит: «это первый шаг, потом будет несколько бирж» — следующие уроки выведут на межбиржевой арбитраж.
         <br><strong>Применимость:</strong> <span class="tag-ok">Высокая</span>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="lesson-card">
+    <div class="lesson-header">
+      <span class="lesson-num">Урок 03</span>
+      <span class="lesson-title">Научил Новичка ТРЕЙДИНГУ за День. Руководство 2.0</span>
+    </div>
+    <p class="lesson-desc">Межбиржевой фьючерсный арбитраж. Ratio, две ноги (Long+Short), фандинг, плечо ×3–4, asyncio.gather.</p>
+    <div class="lesson-body">
+
+      <div class="info">
+        <div class="section-label">📊 Ключевые параметры</div>
+        <ul>
+          <li>Порог входа: <strong>3–3.5%</strong> расхождения ratio</li>
+          <li>Максимальное плечо: <strong>×3–×4</strong> (не выше!)</li>
+          <li>Размер одной ноги: <strong>~$100</strong></li>
+          <li>Фандинг: <strong>0.3%</strong> за отсечку → выходить при прибыли <strong>1%</strong> до таймера</li>
+          <li>Схождение в <strong>99%</strong> случаев (если токен не делистнут)</li>
+        </ul>
+      </div>
+
+      <div class="plus">
+        <div class="section-label">✅ Плюсы</div>
+        <ul>
+          <li>Полная механика стратегии от сигнала до выхода</li>
+          <li>Готовый ccxt-скелет с <code>asyncio.gather</code> для двух бирж одновременно</li>
+          <li>Чёткие параметры входа, плеча, фандинга — напрямую в код</li>
+          <li>Усреднение при расширении до 5% — норма и <strong>преимущество</strong> арбитража</li>
+        </ul>
+      </div>
+
+      <div class="minus">
+        <div class="section-label">⚠️ Риски</div>
+        <ul>
+          <li><strong>Ликвидация</strong> при расширении спреда + высоком плече — критично</li>
+          <li>Фандинг в момент отсечки может резко изменить P&amp;L</li>
+          <li>REST API слишком медленный для продакшна — нужен WebSocket (<code>ccxt.pro</code>)</li>
+          <li>Без скринера сложно найти возможности — нужна инфраструктура мониторинга</li>
+        </ul>
+      </div>
+
+      <div class="info">
+        <div class="section-label">📌 Что добавить в бота</div>
+        <ul>
+          <li><code>fetch_funding_rate()</code> — проверять перед каждым входом</li>
+          <li><code>fetch_positions()</code> — отслеживать liquidation price в реальном времени</li>
+          <li>Цикл мониторинга: <code>ratio &lt;= 1.01</code> → закрыть обе ноги</li>
+          <li>Заменить <code>asyncio.sleep(1)</code> на WebSocket через <code>ccxt.pro</code></li>
+        </ul>
+      </div>
+
+      <div class="verdict-box">
+        <strong>Вывод:</strong> Ключевой урок всего курса — полная стратегия межбиржевого арбитража. Три урока дают законченную картину: макроконтекст → механика стакана → <strong>полноценный арбитраж</strong>. Можно приступать к разработке бота.
+        <br><strong>Применимость:</strong> <span class="tag-ok">Очень высокая</span>
       </div>
 
     </div>
