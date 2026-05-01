@@ -220,7 +220,7 @@
 
   <h1>Отзывы и аналитика — Арбитражная стратегия</h1>
   <p class="subtitle">Честный разбор уроков опытного трейдера (15+ лет арбитража). Обновляется после каждого урока.</p>
-  <p class="updated">Обновлено: 2026-05-02</p>
+  <p class="updated">Обновлено: 2026-05-02 (урок 02)</p>
 
   <div class="course-summary" style="margin-top:18px;">
     <h2>Об источнике материала</h2>
@@ -233,8 +233,64 @@
   <!-- ===== ПРОГРЕСС ===== -->
   <div class="summary-card">
     <h3>📊 Прогресс обработки</h3>
-    <div class="progress-label">Уроки обработаны: 1 / 3</div>
-    <div class="progress-bar-wrap"><div class="progress-bar" style="width:33%"></div></div>
+    <div class="progress-label">Уроки обработаны: 2 / 3</div>
+    <div class="progress-bar-wrap"><div class="progress-bar" style="width:66%"></div></div>
+  </div>
+
+  <div class="lesson-card">
+    <div class="lesson-header">
+      <span class="lesson-num">Урок 02</span>
+      <span class="lesson-title">Научил Новичка ТРЕЙДИНГУ за День. Руководство 1</span>
+    </div>
+    <p class="lesson-desc">Стакан, спред, маркетмейкер на неликвидных токенах. Биржи 3-го эшелона, API-ключи, первый ccxt-скелет.</p>
+    <div class="lesson-body">
+
+      <div class="info">
+        <div class="section-label">📊 Ключевые параметры</div>
+        <ul>
+          <li>Объём сделки: <strong>~$2</strong> — мелко, чтобы не пугать маркетмейкера</li>
+          <li>Биржи: <strong>MEXC, Gate, KuCoin, HTX, Bybit, Bitget</strong> (3-й эшелон)</li>
+          <li>Депозит: USDT в сети <strong>TRC20</strong></li>
+          <li>API: только чтение + ордера, <strong>трансферы — запрещены</strong></li>
+          <li><strong>99%</strong> неудач — на этапе настройки платформы и API-ключей</li>
+        </ul>
+      </div>
+
+      <div class="plus">
+        <div class="section-label">✅ Плюсы</div>
+        <ul>
+          <li>Первый урок с реальным кодом — скелет <code>ccxt.async_support</code> уже применим</li>
+          <li>Конкретные биржи — сразу понятно что подключать через ccxt</li>
+          <li>Механика мейкер/тейкер и стакан — фундамент арбитражного бота</li>
+          <li>Прямо говорит: этот навык — основа для перехода к <strong>межбиржевому арбитражу</strong></li>
+        </ul>
+      </div>
+
+      <div class="minus">
+        <div class="section-label">⚠️ Риски</div>
+        <ul>
+          <li>Неликвидные «скам-токены» — риск застрять в позиции без контрагента</li>
+          <li>Остатки позиции копятся — бот обязан отслеживать точный баланс после каждой сделки</li>
+          <li>Маркетмейкер может уйти в любой момент — нужна логика остановки</li>
+        </ul>
+      </div>
+
+      <div class="info">
+        <div class="section-label">📌 Что добавить в бота</div>
+        <ul>
+          <li><code>fetch_order_book()</code> — получить bid/ask в реальном времени</li>
+          <li><code>create_limit_buy_order()</code> / <code>create_limit_sell_order()</code> по границам спреда</li>
+          <li><code>cancel_all_orders(symbol)</code> — аналог кнопки «Пробел»</li>
+          <li>Проверка баланса базового актива перед каждым sell-ордером</li>
+        </ul>
+      </div>
+
+      <div class="verdict-box">
+        <strong>Вывод:</strong> Самый прикладной урок — прямая механика будущего бота. Трейдер сам говорит: «это первый шаг, потом будет несколько бирж» — следующие уроки выведут на межбиржевой арбитраж.
+        <br><strong>Применимость:</strong> <span class="tag-ok">Высокая</span>
+      </div>
+
+    </div>
   </div>
 
   <!-- ===== МАТРИЦА РИСКОВ ===== -->
