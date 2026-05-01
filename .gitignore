@@ -1,0 +1,60 @@
+# Переменные окружения (API ключи)
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+
+# Виртуальное окружение
+venv/
+.venv/
+env/
+ENV/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Данные (могут быть большими)
+data/*.csv
+data/*.parquet
+data/*.h5
+data/*.json
+
+# Логи
+logs/*.log
+logs/*.txt
+
+# Отчёты
+reports/*.html
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Модели (большие файлы)
+models/
+*.pkl
+*.joblib
+
+# Временные файлы
+tmp/
+temp/
+*.tmp
