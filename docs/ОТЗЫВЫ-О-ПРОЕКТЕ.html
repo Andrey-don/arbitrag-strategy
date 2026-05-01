@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Отзывы — Арбитражная стратегия</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.65;
+    color: #d4d4d4;
+    background: #2b2b2b;
+    padding: 30px 16px 60px;
+  }
+
+  .container { max-width: 860px; margin: 0 auto; }
+
+  h1 {
+    font-size: 26px;
+    font-weight: 700;
+    color: #e8e8e8;
+    border-bottom: 3px solid #3a6fd8;
+    padding-bottom: 10px;
+    margin-bottom: 6px;
+  }
+
+  .subtitle { color: #666; font-size: 13px; margin-bottom: 28px; }
+
+  .course-summary {
+    background: #363636;
+    border-left: 5px solid #3a6fd8;
+    border-radius: 6px;
+    padding: 18px 22px;
+    margin-bottom: 28px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.07);
+  }
+
+  .course-summary h2 { font-size: 17px; color: #6da3f0; margin-bottom: 10px; }
+  .course-summary p { margin-bottom: 4px; }
+
+  .module-header {
+    background: #1e1e1e;
+    color: #fff;
+    border-radius: 6px;
+    padding: 12px 22px;
+    margin: 32px 0 18px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .module-header h2 { font-size: 18px; font-weight: 700; color: #e8e8e8; }
+
+  .badge {
+    background: #3a6fd8;
+    color: #fff;
+    font-size: 12px;
+    padding: 2px 10px;
+    border-radius: 20px;
+    font-weight: 600;
+  }
+
+  .badge-pending {
+    background: #555;
+    color: #ccc;
+    font-size: 12px;
+    padding: 2px 10px;
+    border-radius: 20px;
+    font-weight: 600;
+  }
+
+  .lesson-card {
+    background: #363636;
+    border-radius: 8px;
+    margin-bottom: 18px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    overflow: hidden;
+  }
+
+  .lesson-header {
+    padding: 14px 20px 10px;
+    border-bottom: 1px solid #4a4a4a;
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+
+  .lesson-num {
+    background: #2a3a55;
+    color: #6da3f0;
+    font-weight: 700;
+    font-size: 12px;
+    padding: 2px 10px;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+
+  .lesson-title { font-size: 16px; font-weight: 700; color: #e8e8e8; }
+
+  .lesson-desc {
+    font-size: 13px;
+    color: #999;
+    padding: 8px 20px 0;
+    font-style: italic;
+  }
+
+  .lesson-body { padding: 12px 20px 18px; }
+
+  .section-label {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 12px 0 5px;
+  }
+
+  .plus .section-label  { color: #1a9a5a; }
+  .minus .section-label { color: #c03030; }
+  .warn .section-label  { color: #b97d00; }
+  .info .section-label  { color: #3a6fd8; }
+
+  ul { padding-left: 18px; }
+  ul li { margin-bottom: 3px; font-size: 14px; }
+  ol { padding-left: 20px; }
+  ol li { margin-bottom: 5px; font-size: 14px; }
+
+  .plus  ul li::marker { color: #1a9a5a; }
+  .minus ul li::marker { color: #c03030; }
+  .warn  ul li::marker { color: #b97d00; }
+  .info  ul li::marker { color: #3a6fd8; }
+
+  .verdict-box {
+    background: #1e2d45;
+    border-left: 3px solid #3a6fd8;
+    border-radius: 4px;
+    padding: 8px 14px;
+    font-size: 14px;
+    margin-top: 10px;
+  }
+
+  .redflag-box {
+    background: #3a1a1a;
+    border-left: 3px solid #b92b2b;
+    border-radius: 4px;
+    padding: 8px 14px;
+    font-size: 14px;
+    margin: 10px 0;
+    color: #e8a0a0;
+  }
+
+  .pending-card {
+    background: #303030;
+    border: 1px dashed #4a4a4a;
+    border-radius: 8px;
+    padding: 16px 20px;
+    color: #666;
+    font-style: italic;
+    margin-bottom: 18px;
+    font-size: 14px;
+  }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 8px; }
+  th { background: #1e1e1e; color: #c8c8c8; padding: 8px 12px; text-align: left; font-weight: 700; }
+  td { padding: 7px 12px; border-bottom: 1px solid #4a4a4a; vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #404040; }
+
+  .summary-card {
+    background: #363636;
+    border-radius: 8px;
+    padding: 18px 22px;
+    margin-bottom: 18px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+
+  .summary-card h3 {
+    font-size: 15px;
+    color: #e0e0e0;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #4a4a4a;
+    padding-bottom: 6px;
+  }
+
+  .tag-ok   { color: #1a9a5a; font-weight: 700; }
+  .tag-warn { color: #b97d00; font-weight: 700; }
+  .tag-no   { color: #888;   font-weight: 700; }
+
+  code {
+    background: #252525;
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-family: 'Consolas', monospace;
+    font-size: 13px;
+  }
+
+  .progress-label { font-size: 12px; color: #666; margin-bottom: 2px; }
+
+  .progress-bar-wrap {
+    background: #1e1e1e;
+    border-radius: 20px;
+    height: 8px;
+    margin: 6px 0 14px;
+    overflow: hidden;
+  }
+
+  .progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #3a6fd8, #5a9fd8);
+    border-radius: 20px;
+  }
+
+  .updated { font-size: 12px; color: #555; margin-top: 4px; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <h1>Отзывы и аналитика — Арбитражная стратегия</h1>
+  <p class="subtitle">Честный разбор уроков опытного трейдера (15+ лет арбитража). Обновляется после каждого урока.</p>
+  <p class="updated">Обновлено: 2026-05-01</p>
+
+  <div class="course-summary" style="margin-top:18px;">
+    <h2>Об источнике материала</h2>
+    <p><strong>Источник:</strong> Видеоматериалы трейдера с 15+ летним практическим опытом арбитражной торговли.</p>
+    <p><strong>Стиль:</strong> Практический — реальные сделки, реальные цифры и параметры.</p>
+    <p><strong>Главная ценность:</strong> Реальный опыт, а не учебные примеры. Параметры проверены на практике.</p>
+    <p><strong>Для бота:</strong> После каждого урока — добавлять параметры в шаблоны кода, обновлять этот файл.</p>
+  </div>
+
+  <!-- ===== ПРОГРЕСС ===== -->
+  <div class="summary-card">
+    <h3>📊 Прогресс обработки</h3>
+    <div class="progress-label">Уроки обработаны: 0 / ?</div>
+    <div class="progress-bar-wrap"><div class="progress-bar" style="width:0%"></div></div>
+    <p style="font-size:13px; color:#666;">Заполняется по мере получения и обработки транскрибаций.</p>
+  </div>
+
+  <!-- ===== МАТРИЦА РИСКОВ ===== -->
+  <div class="module-header">
+    <h2>Матрица рисков арбитража</h2>
+    <span class="badge-pending">базовая</span>
+  </div>
+
+  <div class="summary-card">
+    <table>
+      <thead>
+        <tr>
+          <th>Риск</th>
+          <th>Вероятность</th>
+          <th>Влияние</th>
+          <th>Митигация</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Спред исчезает до исполнения</td>
+          <td><span class="tag-warn">Высокая</span></td>
+          <td><span style="color:#c03030;font-weight:700">Критично</span></td>
+          <td>Websocket + asyncio, скорость исполнения</td>
+        </tr>
+        <tr>
+          <td>Комиссии съедают прибыль</td>
+          <td><span class="tag-warn">Высокая</span></td>
+          <td><span class="tag-warn">Высокое</span></td>
+          <td>Порог входа строго &gt; комиссии × 2</td>
+        </tr>
+        <tr>
+          <td>Частичное исполнение ордера</td>
+          <td>Средняя</td>
+          <td><span class="tag-warn">Высокое</span></td>
+          <td>Проверять <code>filled_qty</code> перед вторым ордером</td>
+        </tr>
+        <tr>
+          <td>Сбой API одной биржи</td>
+          <td>Средняя</td>
+          <td><span style="color:#c03030;font-weight:700">Критично</span></td>
+          <td>Retry с exponential backoff, хеджирование</td>
+        </tr>
+        <tr>
+          <td>Разный объём на биржах</td>
+          <td>Средняя</td>
+          <td><span class="tag-warn">Высокое</span></td>
+          <td>Проверять ликвидность до входа в сделку</td>
+        </tr>
+        <tr>
+          <td>Funding rate (крипта)</td>
+          <td><span class="tag-warn">Высокая</span></td>
+          <td>Среднее</td>
+          <td>Учитывать в расчёте минимального спреда</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ===== МОДУЛЬ 01 ===== -->
+  <div class="module-header">
+    <h2>Модуль 01 — Арбитражная стратегия</h2>
+    <span class="badge-pending">⏳ В процессе</span>
+  </div>
+
+  <!-- Карточки уроков появятся здесь по мере обработки транскрибаций -->
+  <div class="pending-card">
+    ⏳ Уроки ещё не обработаны. После получения транскрибаций и обработки через NotebookLM —
+    карточки уроков появятся здесь. Каждая карточка: плюсы, риски, параметры для бота, вывод.
+  </div>
+
+  <!-- ===== КРАСНЫЕ ФЛАГИ ===== -->
+  <div class="module-header">
+    <h2>Красные флаги — что НЕ делать</h2>
+  </div>
+
+  <div class="summary-card">
+    <div class="redflag-box">
+      🚨 Запускать бот на реальные деньги без проверки в <code>DRY_RUN</code> минимум 1–2 недели
+    </div>
+    <div class="redflag-box">
+      🚨 Игнорировать скорость исполнения — в арбитраже миллисекунды решают всё
+    </div>
+    <div class="redflag-box">
+      🚨 Не учитывать комиссии при расчёте минимального порога спреда
+    </div>
+    <div class="redflag-box">
+      🚨 Оставлять бот без watchdog и автоматического стопа по дневному убытку
+    </div>
+    <div class="redflag-box">
+      🚨 Не обрабатывать частичное исполнение ордера — может создать неприкрытую позицию
+    </div>
+  </div>
+
+  <!-- ===== ИТОГОВАЯ МАТРИЦА ===== -->
+  <div class="module-header">
+    <h2>Что реально работает в арбитраже</h2>
+    <span class="badge-pending">заполняется</span>
+  </div>
+
+  <div class="summary-card">
+    <p style="color:#666; font-style:italic; font-size:14px;">
+      Таблица заполняется после обработки всех уроков.
+    </p>
+  </div>
+
+</div>
+</body>
+</html>
