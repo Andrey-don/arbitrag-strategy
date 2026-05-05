@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MOEX Раздел 7 — Полный отзыв</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.65;
+    color: #d4d4d4;
+    background: #2b2b2b;
+    padding: 30px 16px 60px;
+  }
+
+  .container { max-width: 920px; margin: 0 auto; }
+
+  h1 {
+    font-size: 26px;
+    font-weight: 700;
+    color: #e8e8e8;
+    border-bottom: 3px solid #3a6fd8;
+    padding-bottom: 10px;
+    margin-bottom: 6px;
+  }
+
+  .subtitle { color: #666; font-size: 13px; margin-bottom: 28px; }
+
+  /* ─── Блок-шапка раздела ─── */
+  .section-hero {
+    background: linear-gradient(135deg, #1a2a45 0%, #1e3a2a 100%);
+    border-left: 5px solid #27ae60;
+    border-radius: 8px;
+    padding: 22px 26px;
+    margin-bottom: 28px;
+  }
+  .section-hero h2 { font-size: 19px; color: #6de8a0; margin-bottom: 10px; }
+  .section-hero p  { margin-bottom: 4px; font-size: 14px; }
+
+  /* ─── Звёзды ─── */
+  .stars { font-size: 22px; color: #f0b429; letter-spacing: 2px; margin-bottom: 4px; }
+  .stars-label { font-size: 13px; color: #999; }
+
+  /* ─── Заголовки блоков ─── */
+  .block-header {
+    background: #1e1e1e;
+    color: #fff;
+    border-radius: 6px;
+    padding: 12px 22px;
+    margin: 32px 0 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .block-header h2 { font-size: 17px; font-weight: 700; color: #e8e8e8; }
+  .badge {
+    background: #3a6fd8;
+    color: #fff;
+    font-size: 11px;
+    padding: 2px 10px;
+    border-radius: 20px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .badge-green { background: #1a7a48; }
+  .badge-orange { background: #7a4f1a; }
+  .badge-red { background: #7a1a1a; }
+
+  /* ─── Карточка урока ─── */
+  .lesson-card {
+    background: #363636;
+    border-radius: 8px;
+    margin-bottom: 18px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    overflow: hidden;
+  }
+  .lesson-header {
+    padding: 14px 20px 10px;
+    border-bottom: 1px solid #4a4a4a;
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .lesson-num {
+    background: #2a3a55;
+    color: #6da3f0;
+    font-weight: 700;
+    font-size: 11px;
+    padding: 2px 10px;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+  .lesson-title { font-size: 15px; font-weight: 700; color: #e8e8e8; flex: 1; }
+  .lesson-body  { padding: 12px 20px 18px; }
+
+  /* ─── Секции внутри карточки ─── */
+  .section-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin: 12px 0 5px;
+  }
+  .plus  .section-label { color: #1a9a5a; }
+  .minus .section-label { color: #c03030; }
+  .warn  .section-label { color: #b97d00; }
+  .info  .section-label { color: #3a6fd8; }
+  .params .section-label { color: #7a4fd8; }
+
+  ul { padding-left: 18px; }
+  ul li { margin-bottom: 3px; font-size: 14px; }
+  .plus  ul li::marker { color: #1a9a5a; }
+  .minus ul li::marker { color: #c03030; }
+  .warn  ul li::marker { color: #b97d00; }
+  .info  ul li::marker { color: #3a6fd8; }
+  .params ul li::marker { color: #7a4fd8; }
+
+  /* ─── Вердикт ─── */
+  .verdict-box {
+    background: #1e2d45;
+    border-left: 3px solid #3a6fd8;
+    border-radius: 4px;
+    padding: 8px 14px;
+    font-size: 14px;
+    margin-top: 10px;
+  }
+  .verdict-box.green { background: #1a2d1e; border-color: #27ae60; }
+
+  /* ─── Red flags ─── */
+  .redflag-box {
+    background: #3a1a1a;
+    border-left: 3px solid #b92b2b;
+    border-radius: 4px;
+    padding: 10px 16px;
+    font-size: 14px;
+    margin: 10px 0;
+    color: #e8a0a0;
+  }
+
+  /* ─── Итоговые таблицы ─── */
+  table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 8px; }
+  th { background: #1e1e1e; color: #c8c8c8; padding: 8px 12px; text-align: left; font-weight: 700; }
+  td { padding: 7px 12px; border-bottom: 1px solid #4a4a4a; vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #404040; }
+
+  .tag-ok   { color: #1a9a5a; font-weight: 700; }
+  .tag-warn { color: #b97d00; font-weight: 700; }
+  .tag-no   { color: #c03030; font-weight: 700; }
+
+  /* ─── Архитектура бота ─── */
+  .bot-phase {
+    background: #2a2a2a;
+    border: 1px solid #404040;
+    border-radius: 6px;
+    padding: 14px 18px;
+    margin-bottom: 12px;
+  }
+  .bot-phase h4 { color: #6da3f0; font-size: 14px; margin-bottom: 8px; }
+  .bot-phase code {
+    display: block;
+    background: #1a1a1a;
+    border-radius: 4px;
+    padding: 10px 14px;
+    font-family: 'Consolas', monospace;
+    font-size: 13px;
+    color: #b5e0a0;
+    white-space: pre;
+    overflow-x: auto;
+  }
+
+  /* ─── Сравнение MOEX vs Крипто ─── */
+  .compare-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-top: 10px;
+  }
+  .compare-col {
+    background: #2e2e2e;
+    border-radius: 6px;
+    padding: 14px 16px;
+  }
+  .compare-col h4 { font-size: 13px; color: #999; margin-bottom: 8px; font-weight: 600; }
+  .compare-col.win  { border-top: 3px solid #27ae60; }
+  .compare-col.lose { border-top: 3px solid #7a7a7a; }
+
+  /* ─── Итог ─── */
+  .final-box {
+    background: linear-gradient(135deg, #1a2a45, #1a3a28);
+    border: 2px solid #27ae60;
+    border-radius: 10px;
+    padding: 24px 28px;
+    margin-top: 28px;
+    text-align: center;
+  }
+  .final-box h2 { font-size: 20px; color: #6de8a0; margin-bottom: 10px; }
+  .final-box p  { font-size: 14px; color: #aaa; }
+
+  code {
+    background: #252525;
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-family: 'Consolas', monospace;
+    font-size: 13px;
+    color: #b5e0a0;
+  }
+
+  .chip {
+    display: inline-block;
+    background: #2a3a55;
+    color: #6da3f0;
+    font-size: 12px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    margin: 2px;
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ══════════════════════════════════════════
+       ШАПКА
+  ══════════════════════════════════════════ -->
+  <h1>Раздел 7 — Арбитраж на МОЕХ</h1>
+  <div class="subtitle">Полный отзыв · Обновлено: 2026-05-05 · Уроки 11–17</div>
+
+  <div class="section-hero">
+    <h2>ТАТки (TATN / TATNP) — стратегия №1 для жителя РФ</h2>
+    <div class="stars">★★★★★</div>
+    <div class="stars-label">5 / 5 — Приоритет №1 для разработки бота</div>
+    <p style="margin-top:12px">Арбитраж на разнице цен обычки и привилегированных акций Татнефти.
+    Коинтегрированная пара, рублёвая торговля, без санкций, доступна из РФ без ограничений.
+    Подтверждена на десятках учеников курса.</p>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       СОДЕРЖАНИЕ РАЗДЕЛА
+  ══════════════════════════════════════════ -->
+  <div class="block-header">
+    <h2>Содержание раздела</h2>
+    <span class="badge">10 видео</span>
+    <span class="badge badge-green">7 с транскрибацией</span>
+    <span class="badge badge-orange">3 только практика (без слов)</span>
+  </div>
+
+  <table>
+    <tr>
+      <th>#</th><th>Видео</th><th>Формат</th><th>Статус</th>
+    </tr>
+    <tr><td>1</td><td>Арбитраж на МОЕХ. Часть 1</td><td>Лекция</td><td><span class="tag-ok">✅ конспект</span></td></tr>
+    <tr><td>2</td><td>Арбитраж на МОЕХ. Часть 2</td><td>Практика</td><td><span class="tag-ok">✅ конспект</span></td></tr>
+    <tr><td>4</td><td>Замечание по ТАТкам</td><td>MP4 (короткий)</td><td><span class="tag-warn">⚠ нет транскрибации</span></td></tr>
+    <tr><td>7</td><td>Про арбитражи и ТАТки. Часть 1</td><td>Теория</td><td><span class="tag-ok">✅ конспект</span></td></tr>
+    <tr><td>8</td><td>Набор позиции, выход и стакан. Часть 2</td><td>Практика</td><td><span class="tag-ok">✅ конспект</span></td></tr>
+    <tr><td>9</td><td>Комментарий по ТАТкам</td><td>Короткий</td><td><span class="tag-ok">✅ конспект</span></td></tr>
+    <tr><td>10</td><td>Как набрать ТАТок</td><td>MP4 (без слов)</td><td><span class="tag-warn">⚠ только видео</span></td></tr>
+    <tr><td>11</td><td>Ответы на вопросы по ТАТкам</td><td>Q&amp;A</td><td><span class="tag-ok">✅ конспект</span></td></tr>
+    <tr><td>12</td><td>Ещё раз как набирать</td><td>MP4 (без слов)</td><td><span class="tag-warn">⚠ только видео</span></td></tr>
+    <tr><td>14</td><td>Про фандинг</td><td>Короткий</td><td><span class="tag-ok">✅ конспект</span></td></tr>
+  </table>
+
+  <!-- ══════════════════════════════════════════
+       ПАРАМЕТРЫ СТРАТЕГИИ
+  ══════════════════════════════════════════ -->
+  <div class="block-header">
+    <h2>Параметры стратегии ТАТки</h2>
+    <span class="badge badge-green">MOEX ММВБ</span>
+  </div>
+
+  <table>
+    <tr><th>Параметр</th><th>Значение</th></tr>
+    <tr><td>Инструменты</td><td>TATN (обычка) / TATNP (прив) — Татнефть, МОЕХ ММВБ</td></tr>
+    <tr><td>Типичный спред (скальп)</td><td>2–5 рублей</td></tr>
+    <tr><td>Типичный спред (среднесрочно)</td><td>5–20 рублей (после 2020)</td></tr>
+    <tr><td>Исторический максимум</td><td>250 рублей (до 2020, разные дивиденды)</td></tr>
+    <tr><td>Пол спреда</td><td>~0 рублей (ниже не ходит исторически)</td></tr>
+    <tr><td>Начальный капитал (новичок)</td><td>100 000 ₽</td></tr>
+    <tr><td>Цель новичка (скальп)</td><td>×10–15 за 1.5 месяца (подтверждено учениками)</td></tr>
+    <tr><td>Доходность среднесрочника</td><td>200–500 тыс. ₽ на позиции 40–50 тыс. лотов</td></tr>
+    <tr><td>Налоговый режим</td><td>Полное сальдирование лонг+шорт — налог только с чистого</td></tr>
+    <tr><td>Брокер</td><td>CScalp (Коскэп), пропсчёт</td></tr>
+    <tr><td>Терминал</td><td>Привод (от CScalp)</td></tr>
+    <tr><td>Алерт</td><td>TradingView → 2.5 рубля (crossing)</td></tr>
+    <tr><td>Комиссии на круг</td><td>×4 (вход+выход × 2 ноги)</td></tr>
+    <tr><td>Макс. сделок в день (автор)</td><td>3</td></tr>
+  </table>
+
+  <!-- ══════════════════════════════════════════
+       КОНСПЕКТЫ УРОКОВ
+  ══════════════════════════════════════════ -->
+  <div class="block-header">
+    <h2>Отзывы по урокам</h2>
+  </div>
+
+  <!-- УРОК 11 -->
+  <div class="lesson-card">
+    <div class="lesson-header">
+      <span class="lesson-num">УРОК 11</span>
+      <span class="lesson-title">Арбитраж на МОЕХ. Часть 1 — Введение в ТАТки</span>
+      <span class="badge badge-green">~19 мин</span>
+    </div>
+    <div class="lesson-body">
+      <p style="font-size:13px;color:#999;margin-bottom:10px;font-style:italic">
+        Первое введение в MOEX-арбитраж. Пара TATN/TATNP, построение графика спреда в TradingView, механика стратегии.
+      </p>
+
+      <div class="params">
+        <div class="section-label">Ключевые параметры</div>
+        <ul>
+          <li>TATN / TATNP — с 2020 одинаковые дивиденды → фундаментально одна бумага</li>
+          <li>TradingView: ratio (TATN÷TATNP=1) и difference (TATN−TATNP=0)</li>
+          <li>Прив тоньше по стакану → рвётся сильнее (до 1 рубля за прокидку)</li>
+          <li>100 тыс. ₽ → ×10–15 за 1.5 мес. по словам учеников</li>
+        </ul>
+      </div>
+
+      <div class="plus">
+        <div class="section-label">Плюсы</div>
+        <ul>
+          <li>Полностью рублёвая, без санкционных рисков</li>
+          <li>Низкий порог входа — 1 лот, всегда дадут исполнение</li>
+          <li>Налоговая эффективность: лонг+шорт = одно сальдо</li>
+          <li>Нет зависимости от крипто-инфраструктуры</li>
+        </ul>
+      </div>
+
+      <div class="minus">
+        <div class="section-label">Риски</div>
+        <ul>
+          <li>Структурный сдвиг: дивиденды снова могут разойтись → спред изменится</li>
+          <li>При большом плече — маржин-колл</li>
+        </ul>
+      </div>
+
+      <div class="verdict-box green">
+        <strong>Вывод:</strong> Стратегия №1 для РФ. Подтверждена практикой. Идеальная точка старта для бота.
+        MOEX ISS API бесплатен — мониторинг спреда легко автоматизировать.
+      </div>
+    </div>
+  </div>
+
+  <!-- УРОК 12 -->
+  <div class="lesson-card">
+    <div class="lesson-header">
+      <span class="lesson-num">УРОК 12</span>
+      <span class="lesson-title">Арбитраж на МОЕХ. Часть 2 — Практика в стакане</span>
+      <span class="badge badge-green">~20 мин</span>
+    </div>
+    <div class="lesson-body">
+      <p style="font-size:13px;color:#999;margin-bottom:10px;font-style:italic">
+        Живая практика в Приводе. Настройка окон, два стакана, реальные входы и выходы.
+      </p>
+
+      <div class="params">
+        <div class="section-label">Ключевые параметры</div>
+        <ul>
+          <li>Прокидки прива: 1 000–2 000 лотов = до 1 рубля движения</li>
+          <li>Обычку сдвинуть: нужно 5 000–10 000 лотов</li>
+          <li>Выставлять лимитки за 0.5–1 рубль заранее</li>
+          <li>Escape = отменить все заявки (горячая клавиша)</li>
+          <li>Всегда лимитки (maker), не рынок (taker)</li>
+        </ul>
+      </div>
+
+      <div class="plus">
+        <div class="section-label">Плюсы</div>
+        <ul>
+          <li>Прокидки — предсказуемые точки входа/выхода</li>
+          <li>Асимметрия ликвидности работает в пользу скальпера</li>
+        </ul>
+      </div>
+
+      <div class="warn">
+        <div class="section-label">Ограничения</div>
+        <ul>
+          <li>Нужен опыт чтения стакана — не формализуется легко</li>
+          <li>Одну ногу закрыл — вторая может уйти против</li>
+        </ul>
+      </div>
+
+      <div class="verdict-box">
+        <strong>Применимость в боте:</strong> Средняя. Прокидки сложно детектировать алгоритмически.
+        Рекомендую сначала освоить руками, затем добавить в бот анализ объёма.
+      </div>
+    </div>
+  </div>
+
+  <!-- УРОК 13 -->
+  <div class="lesson-card">
+    <div class="lesson-header">
+      <span class="lesson-num">УРОК 13</span>
+      <span class="lesson-title">Теория спреда и ТАТки — Два режима торговли</span>
+      <span class="badge badge-green">~25 мин</span>
+    </div>
+    <div class="lesson-body">
+      <p style="font-size:13px;color:#999;margin-bottom:10px;font-style:italic">
+        Фундаментальная теория статистического арбитража. История пары. Скальп vs среднесрочка.
+      </p>
+
+      <div class="params">
+        <div class="section-label">История спреда</div>
+        <ul>
+          <li>До 2019: <strong>250 рублей</strong> (разные дивиденды)</li>
+          <li>После 2020: <strong>5–20 рублей</strong> (дивиденды уравнены)</li>
+          <li>Февраль 2020: единственный выход ниже 0 (−6 руб.)</li>
+          <li>«Ноль» ТАТок = 5–6 рублей (там они бывают чаще всего)</li>
+        </ul>
+      </div>
+
+      <div class="info">
+        <div class="section-label">Два торговых режима</div>
+        <ul>
+          <li><strong>Скальп:</strong> сигнал = скорость расхождения; 1–1000 лотов; частые сделки</li>
+          <li><strong>Среднесрочка:</strong> набор неделями на минимуме; цель 5–20 руб.; 200–500 тыс. ₽</li>
+          <li><strong>Усреднение разрешено</strong> — коинтеграция гарантирует возврат</li>
+        </ul>
+      </div>
+
+      <div class="minus">
+        <div class="section-label">Риски</div>
+        <ul>
+          <li>«99 плюсовых сделок, одна отрицательная может порвать»</li>
+          <li>Шорт спреда → потенциально неограниченный убыток</li>
+        </ul>
+      </div>
+
+      <div class="verdict-box green">
+        <strong>Вывод:</strong> Обязательная теоретическая база перед автоматизацией.
+        Оба режима можно закодить. Начать с алерт-бота по скальп-логике.
+      </div>
+    </div>
+  </div>
+
+  <!-- УРОК 14 -->
+  <div class="lesson-card">
+    <div class="lesson-header">
+      <span class="lesson-num">УРОК 14</span>
+      <span class="lesson-title">Набор позиции и выход — Работа с крупными объёмами</span>
+      <span class="badge badge-green">~20 мин</span>
+    </div>
+    <div class="lesson-body">
+      <p style="font-size:13px;color:#999;margin-bottom:10px;font-style:italic">
+        Практика с позицией 6 250 лотов. Алерты, стратегии частичного закрытия, работа с прокидками.
+      </p>
+
+      <div class="params">
+        <div class="section-label">Ключевые параметры</div>
+        <ul>
+          <li>Алерт TradingView: 2.5 рубля (crossing) → на часы + телефон</li>
+          <li>Набирать частями: 250–1 000 лотов за раз</li>
+          <li>Заявки выхода расставлять <strong>заранее</strong>, не ждать движения</li>
+          <li>Комиссии: ×4 на круг (вход + выход × 2 ноги)</li>
+          <li>Прив закрывать первым (тоньше → лучше исполнение)</li>
+        </ul>
+      </div>
+
+      <div class="plus">
+        <div class="section-label">Применимость в боте</div>
+        <ul>
+          <li>Алерт-функция — первое что реализовать</li>
+          <li>Логика «набирать частями при снижении» — поддаётся алгоритмизации</li>
+        </ul>
+      </div>
+
+      <div class="verdict-box">
+        <strong>Вывод:</strong> Алерт по спреду — фаза 1 бота. Легко сделать через MOEX ISS API + Telegram.
+      </div>
+    </div>
+  </div>
+
+  <!-- УРОК 15 -->
+  <div class="lesson-card">
+    <div class="lesson-header">
+      <span class="lesson-num">УРОК 15</span>
+      <span class="lesson-title">Комментарий по ТАТкам — Риски и реальный маржин-колл</span>
+      <span class="badge badge-orange">~7 мин</span>
+    </div>
+    <div class="lesson-body">
+      <p style="font-size:13px;color:#999;margin-bottom:10px;font-style:italic">
+        Реальный случай маржин-колла. Потеря 40% депозита и восстановление.
+      </p>
+
+      <div class="minus">
+        <div class="section-label">Реальный инцидент</div>
+        <ul>
+          <li>3 августа: агрессивный шорт прива + параллельный арбитраж → маржин-колл</li>
+          <li><strong>Потеря: −40% депозита</strong> при автоматическом закрытии</li>
+          <li>Автоматическое закрытие = сквиз = потери намного больше</li>
+          <li>Восстановление: на следующий день набрался снова, отбил ~половину</li>
+        </ul>
+      </div>
+
+      <div class="warn">
+        <div class="section-label">Правила риск-менеджмента</div>
+        <ul>
+          <li>При приближении маржи → <strong>закрывать вручную</strong>, не ждать автозакрытия</li>
+          <li>Шорт спреда опаснее лонга (нет пола снизу)</li>
+          <li>Макс. 3 сделки в день — только на «хороших движениях»</li>
+          <li>Добавки скидывать на волатильности (0.3 руб.) → улучшать среднюю</li>
+        </ul>
+      </div>
+
+      <div class="redflag-box">
+        🔴 <strong>Красный флаг для бота:</strong> обязательна система мониторинга маржи
+        с Telegram-уведомлением при приближении к margin call level.
+      </div>
+    </div>
+  </div>
+
+  <!-- УРОК 16 -->
+  <div class="lesson-card">
+    <div class="lesson-header">
+      <span class="lesson-num">УРОК 16</span>
+      <span class="lesson-title">Ответы на вопросы по ТАТкам — Q&amp;A</span>
+      <span class="badge">Длинный</span>
+    </div>
+    <div class="lesson-body">
+      <p style="font-size:13px;color:#999;margin-bottom:10px;font-style:italic">
+        Массовый Q&A по итогам первых недель. Инфраструктура, риски, психология.
+      </p>
+
+      <div class="info">
+        <div class="section-label">Ключевые выводы</div>
+        <ul>
+          <li>Готовых скринеров для MOEX-арбитража <strong>не существует</strong> → писать самому</li>
+          <li>Комиссии у всех пропов одинаковые — не конкурентный параметр</li>
+          <li>Вход: возле нуля. Выход: «когда увидишь достаточно денег»</li>
+          <li>Равное количество лотов на обе ноги (1:1) достаточно</li>
+          <li>Несколько пропов = диверсификация ✅</li>
+          <li>Усреднение допустимо (коинтеграция оправдывает)</li>
+        </ul>
+      </div>
+
+      <div class="minus">
+        <div class="section-label">Запрещено</div>
+        <ul>
+          <li>«Бить в свою же заявку» с разных пропсчетов одного брокера — нарушение ЦБ РФ</li>
+        </ul>
+      </div>
+
+      <div class="verdict-box">
+        <strong>Для бота:</strong> подтверждает необходимость самописного MOEX-скринера.
+        Готовых решений нет — это наше конкурентное преимущество.
+      </div>
+    </div>
+  </div>
+
+  <!-- УРОК 17 -->
+  <div class="lesson-card">
+    <div class="lesson-header">
+      <span class="lesson-num">УРОК 17</span>
+      <span class="lesson-title">Про фандинг и межбиржевой арбитраж — Следующий уровень</span>
+      <span class="badge badge-orange">~5 мин</span>
+    </div>
+    <div class="lesson-body">
+      <p style="font-size:13px;color:#999;margin-bottom:10px;font-style:italic">
+        Итог 1-месячного фандинг-эксперимента. Анонс: золото MOEX vs форекс.
+      </p>
+
+      <div class="params">
+        <div class="section-label">Фандинг-эксперимент</div>
+        <ul>
+          <li>15 000 USDT / 1 месяц → результат положительный</li>
+          <li>Стратегия Антона Ковалева: «нехер трогать, держишь и всё»</li>
+          <li>Если заёмные деньги под 8% → дополнительно ~30–40% сверху</li>
+        </ul>
+      </div>
+
+      <div class="info">
+        <div class="section-label">Следующий этап (анонс)</div>
+        <ul>
+          <li>Золото MOEX (фьючерс) vs форекс (спот) — до экспирации ~2% чистыми</li>
+          <li>Межбиржевой фьюч-спот: следующий раздел курса</li>
+          <li>Валютный арбитраж: уже часть основного дохода автора</li>
+        </ul>
+      </div>
+
+      <div class="verdict-box green">
+        <strong>Вывод:</strong> Фандинг — проще всего автоматизировать (нет стакана).
+        Золото MOEX vs форекс — высокий потенциал, нужна отдельная инфраструктура.
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       ПЛЮСЫ / РИСКИ РАЗДЕЛА
+  ══════════════════════════════════════════ -->
+  <div class="block-header">
+    <h2>Плюсы и риски всей стратегии</h2>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:28px">
+    <div class="lesson-card" style="margin:0">
+      <div class="lesson-header">
+        <span style="color:#1a9a5a;font-weight:700;font-size:14px">✅ ПЛЮСЫ</span>
+      </div>
+      <div class="lesson-body">
+        <div class="plus">
+          <ul>
+            <li><strong>Доступна из РФ без ограничений</strong> — рублёвая, МОЕХ работает</li>
+            <li>Низкий входной порог — 100 тыс. ₽, 1 лот</li>
+            <li>Высокая повторяемость — подтверждена учениками</li>
+            <li>Налоговая эффективность — полное сальдирование</li>
+            <li>Нет крипто-инфраструктуры (VPN, иностранные биржи)</li>
+            <li>Коинтегрированная пара — усреднение обосновано</li>
+            <li>MOEX ISS API бесплатный и открытый</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="lesson-card" style="margin:0">
+      <div class="lesson-header">
+        <span style="color:#c03030;font-weight:700;font-size:14px">⚠ РИСКИ</span>
+      </div>
+      <div class="lesson-body">
+        <div class="minus">
+          <ul>
+            <li><strong>Структурный сдвиг</strong> — если дивиденды снова разойдутся</li>
+            <li>Маржин-колл при агрессивном плече (−40% реальный случай)</li>
+            <li>Ликвидность ограничена при крупных объёмах (50+ тыс. лотов)</li>
+            <li>Нельзя «бить в свою заявку» (ЦБ)</li>
+            <li>Шорт спреда — потенциально неограниченный убыток</li>
+            <li>99 плюс + 1 разрушительный минус = типичная арбитражная статистика</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       MOEX vs КРИПТО
+  ══════════════════════════════════════════ -->
+  <div class="block-header">
+    <h2>ТАТки (МОЕХ) vs Крипто-арбитраж</h2>
+  </div>
+
+  <table>
+    <tr>
+      <th>Параметр</th>
+      <th>ТАТки (МОЕХ)</th>
+      <th>Крипто (CEX)</th>
+    </tr>
+    <tr>
+      <td>Санкции</td>
+      <td><span class="tag-ok">✅ Нет рисков</span></td>
+      <td><span class="tag-no">❌ Высокий риск</span></td>
+    </tr>
+    <tr>
+      <td>Инфраструктура</td>
+      <td><span class="tag-ok">✅ Привод + пропсчёт</span></td>
+      <td><span class="tag-warn">⚠ VPN + иностранные биржи</span></td>
+    </tr>
+    <tr>
+      <td>Начальный капитал</td>
+      <td><span class="tag-ok">✅ 100 тыс. ₽</span></td>
+      <td><span class="tag-warn">⚠ $10 000+</span></td>
+    </tr>
+    <tr>
+      <td>Co-location</td>
+      <td><span class="tag-ok">✅ Не нужен</span></td>
+      <td><span class="tag-no">❌ Для HFT — да</span></td>
+    </tr>
+    <tr>
+      <td>Налоги</td>
+      <td><span class="tag-ok">✅ Простые (сальдо)</span></td>
+      <td><span class="tag-warn">⚠ Сложные</span></td>
+    </tr>
+    <tr>
+      <td>API</td>
+      <td><span class="tag-ok">✅ MOEX ISS (бесплатно)</span></td>
+      <td><span class="tag-ok">✅ ccxt (open source)</span></td>
+    </tr>
+    <tr>
+      <td>Подходит для РФ</td>
+      <td><span class="tag-ok">✅ Идеально</span></td>
+      <td><span class="tag-warn">⚠ С оговорками</span></td>
+    </tr>
+  </table>
+
+  <!-- ══════════════════════════════════════════
+       АРХИТЕКТУРА БОТА
+  ══════════════════════════════════════════ -->
+  <div class="block-header">
+    <h2>Архитектура бота: три фазы</h2>
+    <span class="badge">Python</span>
+    <span class="badge badge-green">MOEX ISS API</span>
+  </div>
+
+  <div class="bot-phase">
+    <h4>Фаза 1 — Мониторинг + Алерт (начать сейчас)</h4>
+    <code>MOEX ISS API → Python → расчёт спреда → Telegram Bot → алерт трейдеру</code>
+    <p style="font-size:13px;color:#888;margin-top:8px">Просто, надёжно. Ручное исполнение. DRY_RUN=true по умолчанию.</p>
+  </div>
+
+  <div class="bot-phase">
+    <h4>Фаза 2 — Полуавтомат (после освоения)</h4>
+    <code>Сигнал → Подтверждение трейдера → Автовыставление лимитных заявок → Мониторинг</code>
+    <p style="font-size:13px;color:#888;margin-top:8px">Брокерский API (CScalp или Finam). Нужно уточнить наличие API.</p>
+  </div>
+
+  <div class="bot-phase">
+    <h4>Фаза 3 — Полный автомат (после полного курса)</h4>
+    <code>Сигнал → Автовход обе ноги → Мониторинг маржи → Алерт при ≥80% маржи → Автовыход</code>
+    <p style="font-size:13px;color:#888;margin-top:8px">Прямая интеграция с брокерским API. Watchdog. Стоп по убытку.</p>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       ЧТО НЕ ДЕЛАТЬ
+  ══════════════════════════════════════════ -->
+  <div class="block-header">
+    <h2>Красные флаги — Что запрещено</h2>
+    <span class="badge badge-red">Критично</span>
+  </div>
+
+  <div class="redflag-box">🔴 Запускать бота на реальные деньги без DRY_RUN минимум 1–2 недели</div>
+  <div class="redflag-box">🔴 Ждать автоматического маржин-колла — закрывать ВРУЧНУЮ при приближении</div>
+  <div class="redflag-box">🔴 Брать шорт спреда агрессивно без учёта истории (спред был 250 рублей!)</div>
+  <div class="redflag-box">🔴 «Бить в свою же заявку» на разных пропсчетах одного брокера — ЦБ РФ запрещает</div>
+  <div class="redflag-box">🔴 Выходить по рынку (taker) там, где можно лимиткой (maker) — комиссии убьют прибыль</div>
+
+  <!-- ══════════════════════════════════════════
+       СЛЕДУЮЩИЕ ШАГИ
+  ══════════════════════════════════════════ -->
+  <div class="block-header">
+    <h2>Следующие шаги</h2>
+  </div>
+
+  <table>
+    <tr><th>Задача</th><th>Приоритет</th></tr>
+    <tr>
+      <td>Написать MOEX ISS API клиент: котировки TATN/TATNP в реальном времени</td>
+      <td><span class="tag-ok">★★★★★</span></td>
+    </tr>
+    <tr>
+      <td>Telegram-алерт при спреде &lt; N рублей (скальп) или &gt; M рублей (выход)</td>
+      <td><span class="tag-ok">★★★★★</span></td>
+    </tr>
+    <tr>
+      <td>Уточнить CScalp API у @KasCapital_Robot</td>
+      <td><span class="tag-warn">★★★★☆</span></td>
+    </tr>
+    <tr>
+      <td>Посмотреть MP4 видео 4, 10, 12 (практика стакана, без слов)</td>
+      <td><span class="tag-warn">★★★☆☆</span></td>
+    </tr>
+    <tr>
+      <td>Следующий раздел курса: фьючерс-спот арбитраж на MOEX</td>
+      <td><span class="tag-ok">★★★★★</span></td>
+    </tr>
+  </table>
+
+  <!-- ══════════════════════════════════════════
+       ИТОГ
+  ══════════════════════════════════════════ -->
+  <div class="final-box">
+    <h2>Итоговая оценка: ★★★★★ — Приоритет №1</h2>
+    <p>ТАТки — лучшая стратегия для жителя РФ из всего изученного курса.</p>
+    <p>Рублёвая, доступная, подтверждена на практике, легко автоматизируется через MOEX ISS API.</p>
+    <p style="margin-top:10px">
+      <span class="chip">TATN/TATNP</span>
+      <span class="chip">MOEX ISS API</span>
+      <span class="chip">Telegram Alert</span>
+      <span class="chip">DRY_RUN=true</span>
+      <span class="chip">asyncio</span>
+    </p>
+  </div>
+
+</div>
+</body>
+</html>
