@@ -1,5 +1,5 @@
 ---
-updated: 2026-05-05 (раздел 7 MOEX — уроки 11–17 обработаны)
+updated: 2026-05-06 (создана bot_spec/ — инженерная структура для разработки бота)
 ---
 
 # SESSION BRIEF — Арбитражный бот (читать первым)
@@ -102,10 +102,26 @@ updated: 2026-05-05 (раздел 7 MOEX — уроки 11–17 обработа
 
 ---
 
+## Инженерная структура бота (bot_spec/)
+
+Параллельная структура — для разработки бота, не для обучения.
+Читать только нужный файл (не все сразу):
+
+| Файл | Читать когда |
+|------|-------------|
+| `docs/bot_spec/00_OVERVIEW.md` | Начало работы над ботом / архитектурные вопросы |
+| `docs/bot_spec/01_STRATEGY_RULES.md` | Кодинг стратегии, правил входа/выхода |
+| `docs/bot_spec/02_RISK_MANAGEMENT.md` | Кодинг риск-менеджера, лимитов |
+| `docs/bot_spec/03_PRODUCTION_EDGE_CASES.md` | Кодинг обработки сбоев, failsafe |
+| `docs/bot_spec/04_INFRASTRUCTURE.md` | Настройка API, брокера, стека |
+
+---
+
 ## Ключевые пути
 
 ```
 Проект:     C:\Users\profi\Documents\Project\arbitrag-strategy\
 Obsidian:   C:\AI-Clone\Brain\01-Projects\Arbitrag-Bot\
 GitHub:     https://github.com/Andrey-don/arbitrag-strategy
+Bot spec:   docs/bot_spec/
 ```
