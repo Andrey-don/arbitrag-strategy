@@ -295,6 +295,72 @@
     color: var(--purple);
   }
 
+  /* ─── БЛОК-СХЕМА ВХОДА/ВЫХОДА ─── */
+  .fc-cond {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--yellow);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .fc-tag {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--yellow);
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .fc-q {
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 6px;
+    color: var(--text);
+  }
+  .fc-p {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.6;
+    background: var(--bg3);
+    border-radius: 4px;
+    padding: 6px 8px;
+    margin-bottom: 8px;
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+  }
+  .fc-branch {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    font-weight: 700;
+    border-top: 1px solid var(--border);
+    padding-top: 8px;
+    margin-top: 2px;
+  }
+  .fc-yes { color: var(--green); }
+  .fc-no  { color: var(--muted); font-size: 11px; font-weight: 400; }
+  .fc-arrow {
+    text-align: center;
+    font-size: 20px;
+    color: var(--muted);
+    padding: 2px 0;
+    line-height: 1.2;
+  }
+  .fc-terminal {
+    border-radius: 8px;
+    padding: 14px 16px;
+    text-align: center;
+  }
+  .fc-loop {
+    background: var(--bg2);
+    border: 1px solid var(--purple);
+    border-radius: 8px;
+    padding: 10px 14px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--purple);
+  }
+
   /* ─── РУКОВОДСТВО НАБЛЮДАТЕЛЯ ─── */
   .obs-phase {
     background: var(--bg2);
@@ -803,6 +869,185 @@
       </tr>
     </tbody>
   </table>
+
+  <!-- БЛОК-СХЕМА: ДВА СТОЛБЦА -->
+  <h2>🔀 Алгоритм входа и выхода — блок-схема</h2>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">
+
+    <!-- ══════════════ ЛЕВЫЙ — ВХОД ══════════════ -->
+    <div style="display:flex;flex-direction:column;gap:0">
+
+      <div style="background:var(--green-dim);border:1px solid var(--green);border-radius:8px;padding:12px 16px;text-align:center;font-weight:700;font-size:14px;color:var(--green);margin-bottom:4px;letter-spacing:.03em">
+        ⬆️ ВХОД В СДЕЛКУ
+      </div>
+
+      <div style="background:var(--bg2);border:1px solid var(--blue);border-radius:8px;padding:10px 14px;text-align:center;font-size:12px;color:var(--blue)">
+        🔵 СТАРТ — дашборд открыт, позиции нет
+      </div>
+
+      <div class="fc-arrow">↓</div>
+
+      <!-- УСЛОВИЕ 1 -->
+      <div class="fc-cond">
+        <div class="fc-tag">УСЛОВИЕ 1</div>
+        <div class="fc-q">◇ Сигнал в зоне входа?</div>
+        <div class="fc-p">LONG_GOOD:  спред 7–20 ₽  AND  ratio ≥ 1.011&#10;LONG_SCALP: спред 5–7  ₽  AND  ratio ≥ 1.008&#10;&#10;Сейчас 29.80 ₽ → TAKE_PROFIT → условие НЕ выполнено</div>
+        <div class="fc-branch">
+          <span class="fc-no">❌ НЕТ → <b style="color:var(--blue)">⏸ Ждать</b> (TAKE_PROFIT/NO_SIGNAL)</span>
+          <span class="fc-yes">✅ ДА ↓</span>
+        </div>
+      </div>
+
+      <div class="fc-arrow">↓</div>
+
+      <!-- УСЛОВИЕ 2 -->
+      <div class="fc-cond">
+        <div class="fc-tag">УСЛОВИЕ 2</div>
+        <div class="fc-q">◇ Спред стабилен или растёт?</div>
+        <div class="fc-p">Скорость падения за 2 последние свечи: &lt; 2 ₽&#10;Алерт не опоздал — спред ещё не схлопнулся</div>
+        <div class="fc-branch">
+          <span class="fc-no">❌ НЕТ → <b style="color:var(--orange)">⏩ Пропустить</b> (поезд ушёл)</span>
+          <span class="fc-yes">✅ ДА ↓</span>
+        </div>
+      </div>
+
+      <div class="fc-arrow">↓</div>
+
+      <!-- УСЛОВИЕ 3 -->
+      <div class="fc-cond">
+        <div class="fc-tag">УСЛОВИЕ 3</div>
+        <div class="fc-q">◇ R/R ≥ 1:2 ?</div>
+        <div class="fc-p">R/R = (спред − 0.5) / 3.0&#10;&#10;спред  7.0 → (7.0−0.5)/3 = 2.17  ✅&#10;спред 12.5 → (12.5−0.5)/3 = 4.0   ✅&#10;спред  5.5 → (5.5−0.5)/3 = 1.67  ❌ &lt; 2</div>
+        <div class="fc-branch">
+          <span class="fc-no">❌ НЕТ → <b style="color:var(--orange)">⏩ Пропустить</b> (невыгодно)</span>
+          <span class="fc-yes">✅ ДА ↓</span>
+        </div>
+      </div>
+
+      <div class="fc-arrow">↓</div>
+
+      <!-- УСЛОВИЕ 4 -->
+      <div class="fc-cond">
+        <div class="fc-tag">УСЛОВИЕ 4</div>
+        <div class="fc-q">◇ Есть запас времени и нет новостей?</div>
+        <div class="fc-p">До конца сессии: ≥ 30 мин (идеал ≥ 60 мин)&#10;Нет: отчётов, решений ЦБ, дивидендов &lt; 30 мин&#10;НЕ пятница после 17:45 МСК</div>
+        <div class="fc-branch">
+          <span class="fc-no">❌ НЕТ → <b style="color:var(--orange)">⏩ Пропустить</b></span>
+          <span class="fc-yes">✅ ДА ↓</span>
+        </div>
+      </div>
+
+      <div class="fc-arrow">↓</div>
+
+      <!-- ДЕЙСТВИЕ: ВХОД -->
+      <div class="fc-terminal" style="background:var(--green-dim);border:2px solid var(--green)">
+        <div style="color:var(--green);font-weight:700;font-size:15px;margin-bottom:10px">✅ НАЖАТЬ РАЗРЕШИТЬ</div>
+        <div style="font-size:12px;color:var(--text);line-height:1.9;text-align:left">
+          ▸ <b>Купить</b> TATNP по рынку (лонг)<br>
+          ▸ <b>Продать</b> TATN по рынку (шорт)<br>
+          ▸ Обе ноги <b>одновременно</b><br>
+          ▸ Зафиксировать: <code>спред_входа = X ₽</code><br>
+          ▸ <b style="color:#f85149">Стоп = X + 3.0 ₽</b> (не забыть!)
+        </div>
+      </div>
+
+    </div>
+    <!-- ═════════════════════════════════════════ -->
+
+    <!-- ══════════════ ПРАВЫЙ — ВЫХОД ══════════════ -->
+    <div style="display:flex;flex-direction:column;gap:0">
+
+      <div style="background:var(--red-dim);border:1px solid var(--red);border-radius:8px;padding:12px 16px;text-align:center;font-weight:700;font-size:14px;color:var(--red);margin-bottom:4px;letter-spacing:.03em">
+        ⬇️ ВЫХОД ИЗ СДЕЛКИ
+      </div>
+
+      <div class="fc-loop">
+        🔄 ПЕТЛЯ — каждые 5 сек (дашборд обновляется автоматически)
+      </div>
+
+      <div class="fc-arrow">↓</div>
+
+      <!-- ПРОВЕРКА 1: тейк -->
+      <div class="fc-cond" style="border-left-color:var(--green)">
+        <div class="fc-tag" style="color:var(--green)">ПРОВЕРКА 1 — ТЕЙК</div>
+        <div class="fc-q">◇ Спред ≤ 0.5 ₽ ?</div>
+        <div class="fc-p">Дашборд: сигнал EXIT&#10;Линии сошлись — полный скальп выполнен&#10;Прибыль = (спред_входа − 0.5) × лоты − комиссии</div>
+        <div class="fc-branch">
+          <span class="fc-no">❌ НЕТ ↓</span>
+          <span class="fc-yes">✅ ДА → 🎯 ТЕЙК-ПРОФИТ</span>
+        </div>
+      </div>
+
+      <div class="fc-arrow">↓</div>
+
+      <!-- ПРОВЕРКА 2: стоп -->
+      <div class="fc-cond" style="border-left-color:var(--red)">
+        <div class="fc-tag" style="color:var(--red)">ПРОВЕРКА 2 — СТОП</div>
+        <div class="fc-q">◇ Спред ≥ вход + 3 ₽ ?</div>
+        <div class="fc-p">Пример: вошли при 12.5 ₽ → стоп = 15.5 ₽&#10;Пример: вошли при  8.0 ₽ → стоп = 11.0 ₽&#10;Убыток = −3.0 × лоты (фиксированный риск)</div>
+        <div class="fc-branch">
+          <span class="fc-no">❌ НЕТ ↓</span>
+          <span class="fc-yes" style="color:var(--red)">✅ ДА → 🛑 СТОП-ЛОСС</span>
+        </div>
+      </div>
+
+      <div class="fc-arrow">↓</div>
+
+      <!-- ПРОВЕРКА 3: время -->
+      <div class="fc-cond" style="border-left-color:var(--yellow)">
+        <div class="fc-tag" style="color:var(--yellow)">ПРОВЕРКА 3 — ВРЕМЯ</div>
+        <div class="fc-q">◇ Критическое время — нужно закрыть?</div>
+        <div class="fc-p">До конца сессии ≤ 20 мин (23:50 МСК)&#10;ИЛИ пятница после 17:45 МСК&#10;ИЛИ до новостей/отчётов ≤ 10 мин</div>
+        <div class="fc-branch">
+          <span class="fc-no">❌ НЕТ ↓</span>
+          <span class="fc-yes" style="color:var(--yellow)">✅ ДА → ⏰ ЗАКРЫТЬ (время)</span>
+        </div>
+      </div>
+
+      <div class="fc-arrow">↓</div>
+
+      <!-- ПРОВЕРКА 4: частичный выход -->
+      <div class="fc-cond" style="border-left-color:var(--blue)">
+        <div class="fc-tag" style="color:var(--blue)">ПРОВЕРКА 4 — ОПЦИОНАЛЬНО</div>
+        <div class="fc-q">◇ Спред ≤ 5 ₽ и P&amp;L &gt; 0 ?</div>
+        <div class="fc-p">Можно зафиксировать часть прибыли досрочно&#10;Не дожидаясь EXIT сигнала (0.5 ₽)&#10;Решение трейдера — не обязательно</div>
+        <div class="fc-branch">
+          <span class="fc-no">❌ НЕТ ↓</span>
+          <span class="fc-yes" style="color:var(--blue)">✅ ДА → 💡 ЧАСТИЧНЫЙ ВЫХОД</span>
+        </div>
+      </div>
+
+      <div class="fc-arrow">↓</div>
+
+      <!-- ПЕТЛЯ НАЗАД -->
+      <div class="fc-loop" style="margin-bottom:14px">
+        🔄 Держать позицию → вернуться к ПЕТЛЕ (ждать 5 сек)
+      </div>
+
+      <!-- ТЕРМИНАЛЬНЫЕ ИСХОДЫ -->
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="background:var(--green-dim);border:1px solid var(--green);border-radius:8px;padding:12px 14px;font-size:12px">
+          <b style="color:var(--green)">🎯 ТЕЙК-ПРОФИТ</b><br>
+          <span style="color:var(--muted)">Закрыть обе ноги · Прибыль = (вход−0.5)×лоты−комиссии · Записать в trades.csv</span>
+        </div>
+        <div style="background:var(--red-dim);border:1px solid var(--red);border-radius:8px;padding:12px 14px;font-size:12px">
+          <b style="color:var(--red)">🛑 СТОП-ЛОСС</b><br>
+          <span style="color:var(--muted)">Закрыть немедленно · Убыток = −3₽×лоты · Записать причину в trades.csv</span>
+        </div>
+        <div style="background:var(--yellow-dim);border:1px solid var(--yellow);border-radius:8px;padding:12px 14px;font-size:12px">
+          <b style="color:var(--yellow)">⏰ ЗАКРЫТЬ (время)</b><br>
+          <span style="color:var(--muted)">По рынку · Любой результат · Ночная позиция — недопустимо</span>
+        </div>
+        <div style="background:var(--blue-dim);border:1px solid var(--blue);border-radius:8px;padding:12px 14px;font-size:12px">
+          <b style="color:var(--blue)">💡 ЧАСТИЧНЫЙ ВЫХОД</b><br>
+          <span style="color:var(--muted)">Закрыть половину лотов · Оставшиеся держать до EXIT или стопа</span>
+        </div>
+      </div>
+
+    </div>
+    <!-- ═════════════════════════════════════════ -->
+
+  </div>
 
   <!-- РУКОВОДСТВО НАБЛЮДАТЕЛЯ -->
   <h2>📖 Руководство наблюдателя — что смотреть и когда действовать</h2>
