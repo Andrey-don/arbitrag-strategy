@@ -326,7 +326,8 @@ with st.sidebar:
     paper_mode = st.toggle("📋 Тренажёр", value=True,
                            help="Виртуальные сделки на реальных котировках")
     st.divider()
-    if st.button("🧪 Тест алерта", use_container_width=True):
+    if st.button("🧪 Тест UI (не торговля)", use_container_width=True,
+                 help="Показывает Alert Panel для проверки интерфейса. Не является реальным торговым сигналом."):
         st.session_state.alert_active         = True
         st.session_state.alert_time           = time.time()
         st.session_state.alert_action         = None
