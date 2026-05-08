@@ -144,7 +144,17 @@ st.set_page_config(
     page_icon="📈",
     layout="wide",
 )
-st.title("📈 MATS Dashboard — ТАТки (TATN / TATNP)")
+st.markdown(
+    '<p style="font-size:1.1rem;font-weight:600;margin:0 0 4px 0">'
+    '📈 MATS Dashboard — ТАТки (TATN / TATNP)</p>',
+    unsafe_allow_html=True,
+)
+st.markdown("""
+<style>
+[data-testid="stMetricLabel"] p { font-size: 0.72rem !important; }
+[data-testid="stMetricValue"]   { font-size: 1.15rem !important; line-height: 1.2; }
+</style>
+""", unsafe_allow_html=True)
 
 # Боковая панель — рендерится один раз, не мигает
 with st.sidebar:
