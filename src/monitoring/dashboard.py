@@ -21,6 +21,7 @@ load_dotenv()
 # Конфигурация
 # ---------------------------------------------------------------------------
 TINKOFF_TOKEN = os.getenv("TINKOFF_TOKEN", "")
+DRY_RUN       = os.getenv("DRY_RUN", "true").lower() != "false"  # по умолчанию ВСЕГДА true
 FIGI = {
     "TATN":  "BBG004RVFFC0",
     "TATNP": "BBG004S68829",
@@ -309,6 +310,22 @@ st.markdown("""
 
 # Боковая панель — рендерится один раз, не мигает
 with st.sidebar:
+    if DRY_RUN:
+        st.markdown(
+            '<div style="background:#3d2e00;border:1px solid #e3b341;border-radius:6px;'
+            'padding:8px 12px;margin-bottom:12px;font-size:12px;color:#e3b341">'
+            '🛡️ <b>DRY_RUN = ON</b><br>'
+            '<span style="color:#7d8590">Ордера не выставляются</span></div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            '<div style="background:#3d0f0e;border:2px solid #f85149;border-radius:6px;'
+            'padding:8px 12px;margin-bottom:12px;font-size:12px;color:#f85149">'
+            '⚠️ <b>DRY_RUN = OFF</b><br>'
+            '<span style="color:#f85149">РЕАЛЬНЫЕ ОРДЕРА АКТИВНЫ</span></div>',
+            unsafe_allow_html=True,
+        )
     st.header("⚙️ Параметры")
     days_history = st.selectbox(
         "История", [1, 3, 5, 10], index=0,
