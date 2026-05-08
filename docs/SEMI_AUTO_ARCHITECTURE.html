@@ -294,6 +294,66 @@
     font-size: 12px;
     color: var(--purple);
   }
+
+  /* ─── РУКОВОДСТВО НАБЛЮДАТЕЛЯ ─── */
+  .obs-phase {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 8px;
+    overflow: hidden;
+  }
+  .obs-phase-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 20px;
+    background: var(--bg3);
+    border-bottom: 1px solid var(--border);
+  }
+  .obs-phase-body { padding: 16px 20px; }
+  .obs-check {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .obs-check:last-child { border-bottom: none; }
+  .obs-check .icon { flex-shrink: 0; font-size: 16px; margin-top: 1px; }
+  .obs-check .text { color: var(--text); line-height: 1.6; }
+  .obs-check .text .note { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .warn-box {
+    background: var(--red-dim);
+    border: 1px solid var(--red);
+    border-radius: 10px;
+    padding: 20px 24px;
+  }
+  .cheatsheet {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--bg2);
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .cheatsheet th {
+    background: var(--bg3);
+    padding: 10px 14px;
+    text-align: left;
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .05em;
+  }
+  .cheatsheet td {
+    padding: 10px 14px;
+    border-top: 1px solid var(--border);
+    vertical-align: top;
+  }
+  .cheatsheet tr:hover td { background: var(--bg3); }
 </style>
 </head>
 <body>
@@ -740,6 +800,310 @@
         <td>Прогноз прибыли</td>
         <td>(спред − 0.5) × лоты − комиссии</td>
         <td>≈ +1 200 ₽ (без гарантий)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- РУКОВОДСТВО НАБЛЮДАТЕЛЯ -->
+  <h2>📖 Руководство наблюдателя — что смотреть и когда действовать</h2>
+
+  <!-- 1. КОНЦЕПЦИЯ -->
+  <div style="background:var(--blue-dim);border:1px solid var(--blue);border-radius:10px;padding:20px 24px;margin-bottom:24px;display:flex;gap:16px;align-items:flex-start">
+    <div style="font-size:32px;flex-shrink:0;line-height:1.2">💡</div>
+    <div style="font-size:13px;line-height:1.8;color:var(--text)">
+      <b style="color:var(--blue);font-size:14px">Главный принцип: вы зарабатываете на схождении спреда</b><br>
+      TATN (обыкновенная) всегда торгуется дороже TATNP (привилегированная). <b>Спред = TATN − TATNP.</b>
+      Он постоянно колеблется: расходится → сходится → расходится снова. Исторический пол = 0 ₽, максимум в истории &gt; 250 ₽.<br><br>
+      <b style="color:var(--orange)">Ваша задача:</b> войти когда спред достаточно ШИРОКИЙ (7–20 ₽) — купить TATNP + продать TATN —
+      и выйти когда он СОЙДЁТСЯ (≤ 0.5 ₽). Прибыль = (спред_входа − спред_выхода) × лоты − комиссии.<br><br>
+      <b>Пример:</b> спред сейчас 29.80 ₽ — это <b>TAKE_PROFIT зона</b> (слишком широко для нового входа по текущим параметрам).
+      Вы <b>ждёте, когда спред сузится до 7–15 ₽</b> — тогда сработает алерт LONG_GOOD → вот ваш момент.
+    </div>
+  </div>
+
+  <!-- 2. ШКАЛА СОСТОЯНИЙ -->
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:24px;margin-bottom:24px">
+    <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:16px">🎯 Шкала состояний дашборда — TATN − TATNP (абсолютный спред в ₽)</div>
+
+    <!-- Bar -->
+    <div style="position:relative;margin-bottom:10px">
+      <div style="position:absolute;left:calc(29.8/35*100% - 32px);top:0;font-size:9px;color:#f78166;font-weight:700;white-space:nowrap">↓ Сейчас 29.80 ₽</div>
+      <div style="display:flex;height:30px;border-radius:6px;overflow:hidden;margin-top:16px">
+        <div style="flex:5;background:#161b22;display:flex;align-items:center;justify-content:center;font-size:9px;color:#7d8590;font-weight:700;border-right:1px solid #30363d">EXIT</div>
+        <div style="flex:20;background:#21262d;display:flex;align-items:center;justify-content:center;font-size:9px;color:#7d8590;font-weight:700;border-right:1px solid #30363d">NO_SIGNAL</div>
+        <div style="flex:10;background:#1a2a3a;display:flex;align-items:center;justify-content:center;font-size:9px;color:#58a6ff;font-weight:700;border-right:1px solid #30363d">ALERT</div>
+        <div style="flex:10;background:#1a3a22;display:flex;align-items:center;justify-content:center;font-size:9px;color:#3fb950;font-weight:700;border-right:1px solid #30363d">SCALP</div>
+        <div style="flex:65;background:#3d2e00;display:flex;align-items:center;justify-content:center;font-size:9px;color:#e3b341;font-weight:700;border-right:1px solid #30363d">LONG_GOOD ← ВХОД ЗДЕСЬ</div>
+        <div style="flex:40;background:#3d1a12;display:flex;align-items:center;justify-content:center;font-size:9px;color:#f78166;font-weight:700">TAKE_PROFIT</div>
+      </div>
+      <!-- Scale ticks -->
+      <div style="display:flex;justify-content:space-between;margin-top:4px;font-size:9px;color:#7d8590;padding:0 0">
+        <span>0</span><span>0.5</span><span style="padding-left:8px">2.5</span><span>5</span><span style="padding-left:8px">7</span>
+        <span style="padding-left:32px">20 ₽</span><span>35 ₽</span>
+      </div>
+      <!-- Pointer -->
+      <div style="position:absolute;bottom:16px;left:calc(29.8/35*100% - 1px);width:2px;height:22px;background:#f78166;border-radius:1px"></div>
+    </div>
+
+    <!-- Zone descriptions -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:20px">
+      <div style="border-left:3px solid #7d8590;padding-left:10px">
+        <div style="color:#7d8590;font-size:12px;font-weight:700">EXIT · NO_SIGNAL</div>
+        <div style="color:#7d8590;font-size:11px;margin-top:2px">0 – 2.5 ₽</div>
+        <div style="color:#7d8590;font-size:11px;margin-top:4px;line-height:1.5">EXIT (≤0.5₽): закрыть позицию. NO_SIGNAL: ждать расхождения.</div>
+      </div>
+      <div style="border-left:3px solid #58a6ff;padding-left:10px">
+        <div style="color:#58a6ff;font-size:12px;font-weight:700">ALERT → LONG_SCALP → LONG_GOOD</div>
+        <div style="color:#7d8590;font-size:11px;margin-top:2px">2.5 – 20 ₽</div>
+        <div style="color:#7d8590;font-size:11px;margin-top:4px;line-height:1.5">
+          2.5–5: наблюдать, готовить.<br>5–7: LONG_SCALP (умеренный вход).<br>
+          <b style="color:#e3b341">7–20: LONG_GOOD ← оптимальный вход ⭐</b>
+        </div>
+      </div>
+      <div style="border-left:3px solid #f78166;padding-left:10px">
+        <div style="color:#f78166;font-size:12px;font-weight:700">TAKE_PROFIT (>20 ₽)</div>
+        <div style="color:#7d8590;font-size:11px;margin-top:2px">Сейчас: 29.80 ₽</div>
+        <div style="color:#7d8590;font-size:11px;margin-top:4px;line-height:1.5">Слишком широко для нового входа. Алерт НЕ срабатывает. <b style="color:#f78166">Ждём снижения в зону 7–15 ₽.</b></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. ФАЗЫ -->
+
+  <!-- ФАЗА 1 -->
+  <div class="obs-phase">
+    <div class="obs-phase-header">
+      <div class="step-num g">1</div>
+      <div>
+        <h4 style="font-size:14px;margin-bottom:3px">Фаза 1 — Наблюдение <small style="color:var(--muted);font-weight:400">(нет позиции, дашборд открыт)</small></h4>
+        <p style="color:var(--muted);font-size:12px">Сейчас 29.80 ₽ → TAKE_PROFIT зона. Смотришь и ждёшь. Алерт ещё не горит.</p>
+      </div>
+    </div>
+    <div class="obs-phase-body">
+      <div class="obs-check">
+        <span class="icon">📊</span>
+        <div class="text"><b>Смотришь на число «Спред» вверху дашборда</b>
+          <span class="note">Сейчас 29.80 ₽ → слишком широко (TAKE_PROFIT). Ждёшь, пока опустится в диапазон 7–15 ₽. Это может занять 15 минут или несколько часов.</span></div>
+      </div>
+      <div class="obs-check">
+        <span class="icon">📈</span>
+        <div class="text"><b>График «Спред %» — куда движется?</b>
+          <span class="note">Спред активно падает ↓ → хорошо, скоро войдёт в зону входа. Стабилен или растёт ↑ → ждёшь дальше. Резкий скачок вниз за 1 свечу → осторожно, не успеешь.</span></div>
+      </div>
+      <div class="obs-check">
+        <span class="icon">📐</span>
+        <div class="text"><b>Смотришь на ratio TATN/TATNP</b>
+          <span class="note">Для входа LONG_GOOD нужен ratio ≥ 1.011. Сейчас ~1.056 — это с большим запасом. Ratio падает (приближается к 1.000) → сигнал усиливается ещё больше.</span></div>
+      </div>
+      <div class="obs-check">
+        <span class="icon">🕰️</span>
+        <div class="text"><b>Проверяешь время сессии</b>
+          <span class="note">Приоритет: вечерняя сессия 19:05–23:50 МСК — спред чаще расходится и сходится активнее. Утро/день тоже работает, но меньше движений.</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ФАЗА 2 -->
+  <div class="obs-phase">
+    <div class="obs-phase-header">
+      <div class="step-num o">2</div>
+      <div>
+        <h4 style="font-size:14px;margin-bottom:3px">Фаза 2 — Алерт загорелся <small style="color:var(--muted);font-weight:400">(спред вошёл в зону 7–20 ₽, 30 секунд на решение)</small></h4>
+        <p style="color:var(--muted);font-size:12px">Дашборд мигает оранжевым. Показаны параметры входа. Нужно быстро оценить.</p>
+      </div>
+    </div>
+    <div class="obs-phase-body">
+      <div style="background:var(--bg3);border-radius:8px;padding:12px 16px;margin-bottom:12px;font-size:12px;color:var(--muted)">
+        Пример: спред опустился с 29.80 до <b style="color:#e3b341">12.50 ₽</b> → LONG_GOOD сработал →
+        ratio 1.024 ≥ 1.011 ✅ → алерт мигает
+      </div>
+      <div class="obs-check">
+        <span class="icon">⚖️</span>
+        <div class="text"><b>Смотришь R/R в алерте — должен быть ≥ 1:2</b>
+          <span class="note">R/R = (спред − 0.5 ₽) / 3 ₽. При спреде 12.50: (12.5 − 0.5) / 3 = 4.0. R/R 1:4 — отличный вход. Если R/R ниже 1:2 → ПРОПУСТИТЬ.</span></div>
+      </div>
+      <div class="obs-check">
+        <span class="icon">📉</span>
+        <div class="text"><b>Спред сейчас НЕ сужается стремительно</b>
+          <span class="note">Если видишь на графике: 12.50 → 10 → 8 → за 2 свечи быстро упало — алерт опоздал, поезд ушёл. ПРОПУСТИТЬ. Хорошая ситуация: спред стабилен на 12–15 ₽.</span></div>
+      </div>
+      <div class="obs-check">
+        <span class="icon">💰</span>
+        <div class="text"><b>Смотришь лотность и прогноз прибыли</b>
+          <span class="note">Дашборд считает по РМ: риск 400 ₽, стоп +3 ₽ → лоты = 400 / 3 ≈ 133 лота. Прогноз: (12.5 − 0.5) × 133 = ~1 596 ₽ (при полном сходе). Реально — меньше.</span></div>
+      </div>
+      <div class="obs-check">
+        <span class="icon">📰</span>
+        <div class="text"><b>Нет крупных новостей прямо сейчас</b>
+          <span class="note">Отчётность Татнефти, решение ЦБ по ставке, геополитические события — перед выходом НЕ входить. После публикации — можно.</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ФАЗА 3 -->
+  <div class="obs-phase">
+    <div class="obs-phase-header">
+      <div class="step-num b">3</div>
+      <div>
+        <h4 style="font-size:14px;margin-bottom:3px">Фаза 3 — Нажал РАЗРЕШИТЬ, вошёл в позицию <small style="color:var(--muted);font-weight:400">(мониторинг)</small></h4>
+        <p style="color:var(--muted);font-size:12px">Позиция открыта: куплен TATNP + продан TATN. Теперь следишь за сближением.</p>
+      </div>
+    </div>
+    <div class="obs-phase-body">
+      <div style="background:var(--bg3);border-radius:8px;padding:12px 16px;margin-bottom:14px;font-size:12px">
+        <b>Пример позиции:</b>
+        <span style="color:var(--muted)"> вошли при спреде 12.50 ₽ · стоп 15.50 ₽ (+3₽) · цель 0.5 ₽</span>
+      </div>
+      <div class="obs-check">
+        <span class="icon">📉</span>
+        <div class="text"><b>Спред падает — всё идёт по плану</b>
+          <span class="note">12.50 → 10 → 7 → 4 → 1 → 0.5 ₽. Держишь позицию. P&L растёт. Не закрываешь раньше без причины.</span></div>
+      </div>
+      <div class="obs-check">
+        <span class="icon">📈</span>
+        <div class="text"><b>Спред растёт — следишь за уровнем стопа</b>
+          <span class="note">12.50 → 13 → 14 → 15.50 ₽ = СТОП. Это нормально. Закрываешь немедленно. Рынок иногда идёт против — это часть игры.</span></div>
+      </div>
+      <div class="obs-check">
+        <span class="icon">💵</span>
+        <div class="text"><b>P&L обновляется каждые 5 сек — смотришь на тренд</b>
+          <span class="note">Растёт → спред сужается → хорошо. Падает всё сильнее → спред идёт против → готовься к стопу. Отдельный скачок вверх цены → не паникуй, смотри на СПРЕД, не на цену акции.</span></div>
+      </div>
+      <div class="obs-check">
+        <span class="icon">⏱️</span>
+        <div class="text"><b>Следишь за временем — не держать до финального звонка</b>
+          <span class="note">До 23:45 МСК — обязательно закрыть. Если осталось 20 минут, спред ещё 5 ₽ → закрыть по рынку. Прибыль меньше, но риск оставаться на ночь — неприемлем.</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ФАЗА 4 -->
+  <div class="obs-phase" style="margin-bottom:24px">
+    <div class="obs-phase-header">
+      <div class="step-num p">4</div>
+      <div>
+        <h4 style="font-size:14px;margin-bottom:3px">Фаза 4 — Выход из позиции <small style="color:var(--muted);font-weight:400">(три сценария)</small></h4>
+        <p style="color:var(--muted);font-size:12px">Закрыть ОБЯЗАТЕЛЬНО обе ноги одновременно — asyncio.gather или вручную мгновенно.</p>
+      </div>
+    </div>
+    <div class="obs-phase-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+        <div style="background:var(--green-dim);border:1px solid var(--green);border-radius:8px;padding:16px">
+          <div style="color:var(--green);font-weight:700;font-size:13px;margin-bottom:8px">✅ А — Тейк-профит</div>
+          <div style="font-size:12px;color:var(--text);line-height:1.8">
+            Дашборд показывает <b>EXIT</b><br>
+            (спред ≤ 0.5 ₽)<br><br>
+            Или досрочно по решению:<br>
+            <b>≤ 3–5 ₽</b> — частичный выход<br>
+            при недостатке времени<br><br>
+            <span style="color:var(--muted);font-size:11px">Нажать ЗАКРЫТЬ → обе ноги.</span>
+          </div>
+        </div>
+        <div style="background:var(--red-dim);border:1px solid var(--red);border-radius:8px;padding:16px">
+          <div style="color:var(--red);font-weight:700;font-size:13px;margin-bottom:8px">🛑 Б — Стоп-лосс</div>
+          <div style="font-size:12px;color:var(--text);line-height:1.8">
+            Спред ≥ вход + 3 ₽<br>
+            <b>Пример: 12.50 + 3 = 15.50 ₽</b><br><br>
+            <b style="color:#f85149">Выход НЕМЕДЛЕННО.</b><br>
+            Без раздумий и «подождём».<br><br>
+            <span style="color:var(--muted);font-size:11px">Стоп-ордер на сервере T-Invest защитит автоматически (v3.0).</span>
+          </div>
+        </div>
+        <div style="background:var(--yellow-dim);border:1px solid var(--yellow);border-radius:8px;padding:16px">
+          <div style="color:var(--yellow);font-weight:700;font-size:13px;margin-bottom:8px">⏰ В — Конец сессии</div>
+          <div style="font-size:12px;color:var(--text);line-height:1.8">
+            <b>До 23:45 МСК</b> — любой результат<br><br>
+            <b>Пятница до 17:45 МСК</b> — не оставлять на выходные<br><br>
+            Перед крупными новостями — закрыть заранее<br><br>
+            <span style="color:var(--muted);font-size:11px">Позиция без стопа ночью = неприемлемый риск.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- НЕ ВХОДИТЬ -->
+  <div class="warn-box" style="margin-bottom:24px">
+    <div style="font-size:15px;font-weight:700;color:var(--red);margin-bottom:14px">⛔ Не входить если...</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px">
+      <div style="display:flex;gap:10px;align-items:flex-start">
+        <span style="color:#f85149;flex-shrink:0">✖</span>
+        <span><b>Спред уже активно сужается</b> — алерт опоздал. Если за последние 2–3 свечи спред упал на 3+ ₽ — ПРОПУСТИТЬ.</span>
+      </div>
+      <div style="display:flex;gap:10px;align-items:flex-start">
+        <span style="color:#f85149;flex-shrink:0">✖</span>
+        <span><b>R/R меньше 1:2</b> — потенциальная прибыль не покрывает риск. Дашборд покажет.</span>
+      </div>
+      <div style="display:flex;gap:10px;align-items:flex-start">
+        <span style="color:#f85149;flex-shrink:0">✖</span>
+        <span><b>Спред резко прыгнул вниз за 1 свечу</b> — возможна крупная сделка или новость. Подождать стабилизации.</span>
+      </div>
+      <div style="display:flex;gap:10px;align-items:flex-start">
+        <span style="color:#f85149;flex-shrink:0">✖</span>
+        <span><b>До выхода новостей менее 30 мин</b> — отчётность, решение ЦБ, дивиденды. Не заходить до публикации.</span>
+      </div>
+      <div style="display:flex;gap:10px;align-items:flex-start">
+        <span style="color:#f85149;flex-shrink:0">✖</span>
+        <span><b>Пятница после 17:45 МСК</b> — не оставлять позицию на выходные без гарантированного стопа на сервере.</span>
+      </div>
+      <div style="display:flex;gap:10px;align-items:flex-start">
+        <span style="color:#f85149;flex-shrink:0">✖</span>
+        <span><b>Уже есть открытая убыточная позиция</b> — не усредняться добавлением (мартингейл запрещён).</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ШПАРГАЛКА -->
+  <div style="font-size:13px;color:var(--muted);font-weight:600;margin-bottom:8px">📋 Шпаргалка — быстрые числа для ручного контроля</div>
+  <table class="cheatsheet" style="margin-bottom:48px">
+    <thead>
+      <tr><th>Что смотреть</th><th>Пороговое значение</th><th>Что делать</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><b>Спред (TATN − TATNP)</b></td>
+        <td style="color:var(--yellow)">7–20 ₽ + ratio ≥ 1.011</td>
+        <td style="color:var(--green)">LONG_GOOD → ждать алерт → РАЗРЕШИТЬ</td>
+      </tr>
+      <tr>
+        <td><b>Спред</b></td>
+        <td style="color:var(--green)">5–7 ₽ + ratio ≥ 1.008</td>
+        <td style="color:var(--green)">LONG_SCALP → слабее, только при хорошем R/R</td>
+      </tr>
+      <tr>
+        <td><b>Спред</b></td>
+        <td style="color:var(--orange)">&gt; 20 ₽ (сейчас 29.80 ₽)</td>
+        <td style="color:var(--muted)">TAKE_PROFIT зона → алерт НЕ горит → наблюдаем</td>
+      </tr>
+      <tr>
+        <td><b>Спред</b></td>
+        <td style="color:var(--red)">≤ 0.5 ₽</td>
+        <td style="color:var(--red)">EXIT → закрыть обе ноги немедленно</td>
+      </tr>
+      <tr>
+        <td><b>Стоп-лосс уровень</b></td>
+        <td style="color:var(--red)">спред_входа + 3 ₽</td>
+        <td style="color:var(--red)">Закрыть без раздумий. Пример: вход 12.5 → стоп 15.5 ₽</td>
+      </tr>
+      <tr>
+        <td><b>R/R</b></td>
+        <td style="color:var(--orange)">&lt; 1:2 → не входить</td>
+        <td style="color:var(--muted)">R/R = (спред − 0.5) / 3. При 7 ₽: (7−0.5)/3 = 2.17 ✅</td>
+      </tr>
+      <tr>
+        <td><b>Риск на сделку</b></td>
+        <td style="color:var(--orange)">400 ₽</td>
+        <td style="color:var(--muted)">20% от 10К депо / 5 частей (РМ по Виктору)</td>
+      </tr>
+      <tr>
+        <td><b>Приоритетное время</b></td>
+        <td style="color:var(--purple)">19:05–23:50 МСК</td>
+        <td style="color:var(--muted)">Вечерняя сессия — больше движений спреда</td>
+      </tr>
+      <tr>
+        <td><b>Крайнее время выхода</b></td>
+        <td style="color:var(--yellow)">23:45 МСК / пт 17:45</td>
+        <td style="color:var(--red)">Закрыть любой ценой. Ночная позиция — недопустимо</td>
       </tr>
     </tbody>
   </table>
