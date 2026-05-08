@@ -4,20 +4,18 @@ MATS Dashboard — мониторинг спреда ТАТок (TATN / TATNP)
 Запуск: streamlit run src/monitoring/dashboard.py
 """
 
-import time
 from datetime import datetime, timedelta
 
 import pandas as pd
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import requests
 import streamlit as st
 
 # ---------------------------------------------------------------------------
 # Конфигурация
 # ---------------------------------------------------------------------------
-REFRESH_SEC = 10       # секунд между обновлениями
-HISTORY_DAYS = 1       # дней истории по умолчанию
-BOARD = "TQBR"         # секция MOEX
+BOARD = "TQBR"
 
 SPREAD_LEVELS = [
     (0.0,  "red",    "solid", "0 — пол"),
@@ -25,6 +23,7 @@ SPREAD_LEVELS = [
     (5.0,  "green",  "dash",  "5.0 — скальп"),
     (7.0,  "blue",   "dash",  "7.0 — хороший вход"),
     (10.0, "purple", "dot",   "10.0 — среднесрочка"),
+    (20.0, "red",    "dot",   "20.0 — выход"),
 ]
 RATIO_LEVELS = [
     (1.000, "red",    "1.000 — паритет"),
@@ -32,6 +31,7 @@ RATIO_LEVELS = [
     (1.008, "green",  "1.008 — скальп"),
     (1.011, "blue",   "1.011 — хороший вход"),
     (1.016, "purple", "1.016 — среднесрочка"),
+    (1.032, "red",    "1.032 — выход"),
 ]
 
 
@@ -39,7 +39,6 @@ RATIO_LEVELS = [
 # MOEX ISS API
 # ---------------------------------------------------------------------------
 def get_current_price(ticker: str) -> float | None:
-    """Текущая цена через MOEX ISS (последняя сделка или цена закрытия)."""
     url = (
         f"https://iss.moex.com/iss/engines/stock/markets/shares"
         f"/boards/{BOARD}/securities/{ticker}.json"
@@ -60,14 +59,18 @@ def get_current_price(ticker: str) -> float | None:
         return None
 
 
-def get_candles(ticker: str, days: int = 1) -> pd.DataFrame:
-    """Минутные свечи за последние N дней через MOEX ISS."""
-    date_from = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+_MOEX_VALID_INTERVALS = {1, 10, 60}
+
+
+def get_candles(ticker: str, days: int = 1, interval: int = 1) -> pd.DataFrame:
+    date_from = (datetime.now() - timedelta(days=days - 1)).strftime("%Y-%m-%d")
+    # MOEX ISS поддерживает только 1, 10, 60 мин — остальные ресемплируем из 1 мин
+    base = interval if interval in _MOEX_VALID_INTERVALS else 1
     url = (
         f"https://iss.moex.com/iss/engines/stock/markets/shares"
         f"/boards/{BOARD}/securities/{ticker}/candles.json"
     )
-    params = {"interval": 1, "from": date_from, "iss.meta": "off"}
+    params = {"interval": base, "from": date_from, "iss.meta": "off"}
     try:
         r = requests.get(url, params=params, timeout=10)
         data = r.json()["candles"]
@@ -75,7 +78,16 @@ def get_candles(ticker: str, days: int = 1) -> pd.DataFrame:
             return pd.DataFrame()
         df = pd.DataFrame(data["data"], columns=data["columns"])
         df["begin"] = pd.to_datetime(df["begin"])
-        return df[["begin", "close"]].copy()
+        df = df[["begin", "close"]].copy()
+        if interval != base and not df.empty:
+            df = (
+                df.set_index("begin")
+                .resample(f"{interval}min")["close"]
+                .last()
+                .dropna()
+                .reset_index()
+            )
+        return df
     except Exception:
         return pd.DataFrame()
 
@@ -84,7 +96,8 @@ def get_candles(ticker: str, days: int = 1) -> pd.DataFrame:
 # Логика сигнала
 # ---------------------------------------------------------------------------
 def calc_signal(spread: float, ratio: float) -> tuple[str, str, str]:
-    """Возвращает (код сигнала, описание, тип для st)."""
+    if spread >= 20.0:
+        return "TAKE_PROFIT", "Спред > 20 руб — зона выхода из среднесрочки", "error"
     if ratio < 1.000:
         return "STRONG_LONG", "TATNP дороже обычки — сильный лонг спреда", "error"
     if spread >= 7.0 and ratio >= 1.011:
@@ -108,159 +121,222 @@ st.set_page_config(
 )
 st.title("📈 MATS Dashboard — ТАТки (TATN / TATNP)")
 
-# Боковая панель параметров
+# Боковая панель — рендерится один раз, не мигает
 with st.sidebar:
     st.header("⚙️ Параметры")
-    days_history = st.selectbox("История", [1, 3, 5, 10], index=0, format_func=lambda x: f"{x} дн.")
-    refresh_sec = st.slider("Обновление (сек)", 5, 60, REFRESH_SEC, 5)
+    days_history = st.selectbox(
+        "История", [1, 3, 5, 10], index=0,
+        format_func=lambda x: f"{x} дн.",
+    )
+    timeframe = st.selectbox(
+        "Таймфрейм свечей", [1, 5, 10, 15, 60], index=0,
+        format_func=lambda x: f"{x} мин",
+    )
+    refresh_sec = st.slider("Обновление (сек)", 2, 60, 5, 1)
     st.divider()
     st.caption("Данные: MOEX ISS API")
-    st.caption("Все уровни из bot_spec/01_STRATEGY_RULES.md")
-    update_time = st.empty()
+    st.caption("Уровни: bot_spec/01_STRATEGY_RULES.md")
 
-# Заглушки для живого обновления
-ph_metrics = st.empty()
-ph_signal  = st.empty()
-ph_charts  = st.empty()
 
 # ---------------------------------------------------------------------------
-# Главный цикл
+# Живой фрагмент — обновляется без перезагрузки страницы
 # ---------------------------------------------------------------------------
-while True:
-    update_time.caption(f"Обновлено: {datetime.now().strftime('%H:%M:%S')}")
+@st.fragment(run_every=refresh_sec)
+def live_dashboard(days: int, tf: int) -> None:
+    now = datetime.now().strftime("%H:%M:%S")
+    tf_label = f"{tf} мин · {days} дн."
 
     # --- Текущие цены ---
     price_tatn  = get_current_price("TATN")
     price_tatnp = get_current_price("TATNP")
 
     if not price_tatn or not price_tatnp:
-        ph_signal.error(
-            "⛔ Нет данных от MOEX. Биржа закрыта (10:00–18:50 и 19:05–23:50 МСК) "
-            "или нет интернета."
+        st.error(
+            f"⛔ [{now}] Нет данных от MOEX. "
+            "Биржа закрыта (10:00–18:50 и 19:05–23:50 МСК) или нет интернета."
         )
-        time.sleep(refresh_sec)
-        st.rerun()
+        return
 
     spread_rub = price_tatn  - price_tatnp
     ratio      = price_tatn  / price_tatnp
     spread_pct = (ratio - 1) * 100
 
     # --- Метрики ---
-    with ph_metrics.container():
-        c1, c2, c3, c4, c5 = st.columns(5)
-        c1.metric("TATN",        f"{price_tatn:.2f} ₽")
-        c2.metric("TATNP",       f"{price_tatnp:.2f} ₽")
-        c3.metric("Спред",       f"{spread_rub:.2f} ₽")
-        c4.metric("Ratio",       f"{ratio:.4f}")
-        c5.metric("Откл. от нормы", f"{spread_pct:.2f}%")
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
+    c1.metric("TATN",          f"{price_tatn:.2f} ₽")
+    c2.metric("TATNP",         f"{price_tatnp:.2f} ₽")
+    c3.metric("Спред",         f"{spread_rub:.2f} ₽")
+    c4.metric("Ratio",         f"{ratio:.4f}")
+    c5.metric("Откл. от нормы", f"{spread_pct:.2f}%")
+    c6.metric("Обновлено",     now)
 
     # --- Сигнал ---
     code, desc, stype = calc_signal(spread_rub, ratio)
-    with ph_signal.container():
-        label = f"**{code}** — {desc}"
-        if stype == "success":
-            st.success(label)
-        elif stype == "warning":
-            st.warning(label)
-        elif stype == "error":
-            st.error(label)
-        else:
-            st.info(label)
+    label = f"**{code}** — {desc}"
+    if stype == "success":
+        st.success(label)
+    elif stype == "warning":
+        st.warning(label)
+    elif stype == "error":
+        st.error(label)
+    else:
+        st.info(label)
 
-    # --- История свечей ---
-    df_tatn  = get_candles("TATN",  days=days_history)
-    df_tatnp = get_candles("TATNP", days=days_history)
+    # --- Исторические свечи ---
+    df_tatn  = get_candles("TATN",  days=days, interval=tf)
+    df_tatnp = get_candles("TATNP", days=days, interval=tf)
 
-    with ph_charts.container():
-        if df_tatn.empty or df_tatnp.empty:
-            st.warning("История свечей недоступна (биржа закрыта или нет данных).")
-        else:
-            df = (
-                pd.merge(df_tatn, df_tatnp, on="begin", suffixes=("_tatn", "_tatnp"))
-                .sort_values("begin")
-                .reset_index(drop=True)
-            )
+    if df_tatn.empty or df_tatnp.empty:
+        st.warning("История свечей недоступна (биржа закрыта или нет данных).")
+        return
 
-            # Нормализация для наложения
-            df["tatn_pct"]  = (df["close_tatn"]  / df["close_tatn"].iloc[0]  - 1) * 100
-            df["tatnp_pct"] = (df["close_tatnp"] / df["close_tatnp"].iloc[0] - 1) * 100
-            df["spread"]    = df["close_tatn"] - df["close_tatnp"]
-            df["ratio_h"]   = df["close_tatn"] / df["close_tatnp"]
+    df = (
+        pd.merge(df_tatn, df_tatnp, on="begin", suffixes=("_tatn", "_tatnp"))
+        .sort_values("begin")
+        .reset_index(drop=True)
+    )
+    df["spread"]  = df["close_tatn"] - df["close_tatnp"]   # TATN − TATNP ₽
+    df["ratio_h"] = df["close_tatn"] / df["close_tatnp"]   # TATN / TATNP
 
-            col1, col2, col3 = st.columns(3)
+    # Нормализация к % от первой свечи (как TradingView compare mode)
+    tatn_base      = df["close_tatn"].iloc[0]
+    tatnp_base     = df["close_tatnp"].iloc[0]
+    df["tatn_pct"]    = (df["close_tatn"]  / tatn_base  - 1) * 100
+    df["tatnp_pct"]   = (df["close_tatnp"] / tatnp_base - 1) * 100
+    df["spread_pct"]  = df["tatn_pct"] - df["tatnp_pct"]   # относительный спред в %
 
-            # --- График 1: Наложение % ---
-            with col1:
-                st.subheader("1. Наложение %")
-                fig1 = go.Figure()
-                fig1.add_trace(go.Scatter(
-                    x=df["begin"], y=df["tatn_pct"],
-                    name="TATN (синий)", line=dict(color="#2196F3", width=2),
-                ))
-                fig1.add_trace(go.Scatter(
-                    x=df["begin"], y=df["tatnp_pct"],
-                    name="TATNP (оранж.)", line=dict(color="#FF9800", width=2),
-                ))
-                fig1.add_hline(y=0, line_dash="dot", line_color="gray", line_width=1)
-                fig1.update_layout(
-                    height=380,
-                    margin=dict(l=0, r=10, t=10, b=0),
-                    legend=dict(orientation="h", y=1.12),
-                    yaxis_title="%",
-                    hovermode="x unified",
-                )
-                st.plotly_chart(fig1, use_container_width=True)
-                st.caption(
-                    "Синий НИЖЕ оранж. → ШОРТ TATN + ЛОНГ TATNP  |  "
-                    "Оранж. НИЖЕ синего → ЛОНГ TATN + ШОРТ TATNP"
-                )
+    # --- Три графика: один под другим, синхронная ось X ---
+    # Row 1 использует две Y-оси (TATN справа, TATNP слева)
+    fig = make_subplots(
+        rows=3, cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.06,
+        row_heights=[0.33, 0.33, 0.34],
+        specs=[
+            [{"secondary_y": True}],
+            [{"secondary_y": False}],
+            [{"secondary_y": False}],
+        ],
+    )
 
-            # --- График 2: Разница (руб) ---
-            with col2:
-                st.subheader("2. Разница (₽)")
-                fig2 = go.Figure()
-                fig2.add_trace(go.Scatter(
-                    x=df["begin"], y=df["spread"],
-                    name="Спред", line=dict(color="#4CAF50", width=2),
-                    fill="tozeroy", fillcolor="rgba(76,175,80,0.08)",
-                ))
-                for level, color, dash, label in SPREAD_LEVELS:
-                    fig2.add_hline(
-                        y=level, line_dash=dash, line_color=color, line_width=1,
-                        annotation_text=label, annotation_position="right",
-                        annotation_font_size=10,
-                    )
-                fig2.update_layout(
-                    height=380,
-                    margin=dict(l=0, r=80, t=10, b=0),
-                    yaxis_title="руб",
-                    hovermode="x unified",
-                )
-                st.plotly_chart(fig2, use_container_width=True)
-                st.caption("Основной рабочий график. Вход при спреде ≥ 5 руб.")
+    # Заголовки — маленький шрифт, как подпись
+    TITLE_FONT = dict(size=9, color="rgba(180,180,180,0.9)")
+    for title, y in [
+        (f"Цены, ₽  [{tf_label}]",                 1.005),
+        (f"TATN% − TATNP% (относит. спред)  [{tf_label}]",  0.650),
+        (f"TATN / TATNP ratio  [{tf_label}]",         0.300),
+    ]:
+        fig.add_annotation(
+            text=title, xref="paper", yref="paper",
+            x=0.01, y=y, showarrow=False,
+            font=TITLE_FONT, xanchor="left",
+        )
 
-            # --- График 3: Ratio ---
-            with col3:
-                st.subheader("3. Ratio (TATN/TATNP)")
-                fig3 = go.Figure()
-                fig3.add_trace(go.Scatter(
-                    x=df["begin"], y=df["ratio_h"],
-                    name="Ratio", line=dict(color="#9C27B0", width=2),
-                ))
-                for level, color, label in RATIO_LEVELS:
-                    fig3.add_hline(
-                        y=level, line_dash="dash", line_color=color, line_width=1,
-                        annotation_text=label, annotation_position="right",
-                        annotation_font_size=10,
-                    )
-                fig3.update_layout(
-                    height=380,
-                    margin=dict(l=0, r=110, t=10, b=0),
-                    yaxis_title="ratio",
-                    hovermode="x unified",
-                )
-                st.plotly_chart(fig3, use_container_width=True)
-                st.caption("Нормализованный сигнал. Вход при ratio ≥ 1.008.")
+    # График 1 — двойная ось: TATN справа (оранж.), TATNP слева (синий)
+    # Каждая линия на своей шкале → видны микродвижения обеих
+    fig.add_trace(go.Scatter(
+        x=df["begin"], y=df["close_tatn"],
+        name="TATN", line=dict(color="#FF9800", width=1.5),
+    ), row=1, col=1, secondary_y=False)
+    fig.add_trace(go.Scatter(
+        x=df["begin"], y=df["close_tatnp"],
+        name="TATNP", line=dict(color="#2196F3", width=1.5),
+    ), row=1, col=1, secondary_y=True)
 
-    time.sleep(refresh_sec)
-    st.rerun()
+    # График 2 — относительный спред в % (TATN% − TATNP%), осциллятор вокруг 0
+    fig.add_trace(go.Scatter(
+        x=df["begin"], y=df["spread_pct"],
+        name="Спред%", line=dict(color="#4CAF50", width=1.5),
+        showlegend=True,
+    ), row=2, col=1)
+    fig.add_hline(
+        y=0, line_dash="solid", line_color="rgba(255,255,255,0.8)",
+        line_width=2, row=2, col=1,
+    )
+
+    # График 3 — TATN / TATNP ratio, зум в реальный диапазон
+    fig.add_trace(go.Scatter(
+        x=df["begin"], y=df["ratio_h"],
+        name="Ratio", line=dict(color="#9C27B0", width=1.5),
+    ), row=3, col=1)
+    ratio_open = df["ratio_h"].iloc[0]
+    fig.add_hline(
+        y=ratio_open, line_dash="dash", line_color="rgba(255,255,255,0.5)",
+        line_width=1, row=3, col=1,
+    )
+
+    # Вертикальные линии — каждый час (или каждые 4ч при истории > 2 дней)
+    freq = "4h" if days > 2 else "1h"
+    hourly = pd.date_range(
+        start=df["begin"].min().floor("h"),
+        end=df["begin"].max(),
+        freq=freq,
+    )
+    for t in hourly:
+        fig.add_vline(
+            x=t,
+            line_width=1,
+            line_color="rgba(160,160,160,0.2)",
+            line_dash="solid",
+        )
+
+    # Y-оси справа (как в TradingView)
+    # Верхний: две независимые Y-оси — каждая линия заполняет всю высоту
+    _tatn_pad = max(df["close_tatn"].max() - df["close_tatn"].min(), 1.0) * 0.5
+    fig.update_yaxes(
+        secondary_y=False,
+        side="right", tickfont=dict(size=10), tickformat=".2f",
+        range=[df["close_tatn"].min() - _tatn_pad, df["close_tatn"].max() + _tatn_pad],
+        row=1, col=1,
+    )
+    _tatnp_pad = max(df["close_tatnp"].max() - df["close_tatnp"].min(), 1.0) * 0.5
+    fig.update_yaxes(
+        secondary_y=True,
+        side="left", tickfont=dict(size=10), tickformat=".2f",
+        range=[df["close_tatnp"].min() - _tatnp_pad, df["close_tatnp"].max() + _tatnp_pad],
+        row=1, col=1,
+    )
+    # Средний: относительный спред %, 0 посередине симметрично
+    _s_abs = max(abs(df["spread_pct"].min()), abs(df["spread_pct"].max())) * 1.15 + 0.05
+    fig.update_yaxes(
+        side="right", tickfont=dict(size=10), tickformat=".2f",
+        ticksuffix="%", range=[-_s_abs, _s_abs],
+        row=2, col=1,
+    )
+    # Нижний: ratio зумирован в реальный диапазон (видны микродвижения)
+    _r_lo = df["ratio_h"].min()
+    _r_hi = df["ratio_h"].max()
+    _r_pad = max((_r_hi - _r_lo) * 0.5, 0.0005)
+    fig.update_yaxes(
+        side="right", tickfont=dict(size=10), tickformat=".4f",
+        range=[_r_lo - _r_pad, _r_hi + _r_pad],
+        row=3, col=1,
+    )
+
+    # Общий layout
+    # Временная шкала на всех трёх графиках
+    for row in (1, 2, 3):
+        fig.update_xaxes(
+            showticklabels=True,
+            tickformat="%H:%M",
+            tickfont=dict(size=9),
+            row=row, col=1,
+        )
+
+    fig.update_layout(
+        height=900,
+        margin=dict(l=60, r=80, t=20, b=30),
+        hovermode="x unified",
+        legend=dict(orientation="h", y=1.02, x=0, font=dict(size=11)),
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+    st.caption(
+        "Верхний: цены ₽ (TATN оранж. выше TATNP синего)  |  "
+        "Средний: относит. спред% — осциллятор  |  "
+        "Нижний: ratio TATN/TATNP  |  Zoom/pan синхронный"
+    )
+
+
+# Запускаем живой фрагмент
+live_dashboard(days=days_history, tf=timeframe)
