@@ -203,6 +203,72 @@ def _render_alert(signal_code: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Рендер открытой бумажной позиции
+# ---------------------------------------------------------------------------
+def _render_position(price_tatn: float, price_tatnp: float) -> None:
+    pos            = st.session_state.paper_position
+    current_spread = price_tatn - price_tatnp
+    entry_spread   = pos["entry_spread"]
+    lots           = pos["lots"]
+    commission_close = lots * 4 * 0.05
+
+    pnl_gross = (entry_spread - current_spread) * lots
+    pnl_net   = pnl_gross - pos["commission"] - commission_close
+    elapsed   = datetime.now() - pos["entry_time"]
+    minutes   = int(elapsed.total_seconds() // 60)
+    seconds   = int(elapsed.total_seconds() % 60)
+
+    pnl_color  = "#3fb950" if pnl_net >= 0 else "#f85149"
+    pnl_sign   = "+" if pnl_net >= 0 else ""
+    stop_loss  = -STOP_SPREAD_ADD * lots
+    stop_hit   = pnl_net <= stop_loss
+
+    st.markdown(f"""
+<style>
+@keyframes pos-pulse {{
+    0%,100% {{ border-color: {pnl_color}; box-shadow: 0 0 8px {pnl_color}44; }}
+    50%     {{ border-color: {pnl_color}; box-shadow: 0 0 20px {pnl_color}88; }}
+}}
+.pos-box {{
+    border: 2px solid {pnl_color}; border-radius: 10px;
+    padding: 12px 18px; background: #0d1117; margin-bottom: 10px;
+    animation: pos-pulse 2s ease-in-out infinite;
+}}
+</style>
+<div class="pos-box">
+  <span style="color:{pnl_color};font-size:15px;font-weight:700">
+    📊 ПОЗИЦИЯ ОТКРЫТА &nbsp;·&nbsp;
+    <span style="font-size:20px">{pnl_sign}{pnl_net:.0f} ₽</span>
+  </span>
+  &nbsp;&nbsp;<span style="color:#7d8590;font-size:12px">⏱ {minutes:02d}:{seconds:02d} в позиции</span>
+  {"&nbsp;&nbsp;<span style='color:#f85149;font-weight:700'>⚠️ СТОП-ЛОСС!</span>" if stop_hit else ""}
+</div>
+""", unsafe_allow_html=True)
+
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("Спред входа",   f"{entry_spread:.2f} ₽")
+    c2.metric("Спред сейчас",  f"{current_spread:.2f} ₽",
+              delta=f"{current_spread - entry_spread:+.2f} ₽",
+              delta_color="inverse")
+    c3.metric("Лотов",         f"{lots}")
+    c4.metric("P&L (чистый)",  f"{pnl_sign}{pnl_net:.0f} ₽")
+    c5.metric("Стоп-лосс",     f"{stop_loss:.0f} ₽")
+
+    if st.button("⛔  ЗАКРЫТЬ СДЕЛКУ", type="primary",
+                 use_container_width=True, key="btn_close"):
+        st.session_state.trade_history.append({
+            "Время входа":   pos["entry_time"].strftime("%H:%M:%S"),
+            "Спред входа":   f"{entry_spread:.2f}",
+            "Спред выхода":  f"{current_spread:.2f}",
+            "Лотов":         lots,
+            "P&L ₽":         f"{pnl_sign}{pnl_net:.0f}",
+            "Результат":     "✅ Прибыль" if pnl_net > 0 else "❌ Убыток",
+        })
+        st.session_state.paper_position   = None
+        st.session_state.alert_cooldown_until = time.time() + ALERT_COOLDOWN_S
+
+
+# ---------------------------------------------------------------------------
 # Логика сигнала
 # ---------------------------------------------------------------------------
 def calc_signal(spread: float, ratio: float) -> tuple[str, str, str]:
@@ -257,12 +323,15 @@ with st.sidebar:
     st.caption("Данные: T-Invest API")
     st.caption("Уровни: bot_spec/01_STRATEGY_RULES.md")
     st.divider()
+    paper_mode = st.toggle("📋 Тренажёр", value=True,
+                           help="Виртуальные сделки на реальных котировках")
+    st.divider()
     if st.button("🧪 Тест алерта", use_container_width=True):
-        st.session_state.alert_active       = True
-        st.session_state.alert_time         = time.time()
-        st.session_state.alert_action       = None
+        st.session_state.alert_active         = True
+        st.session_state.alert_time           = time.time()
+        st.session_state.alert_action         = None
         st.session_state.alert_cooldown_until = 0.0
-        st.session_state.alert_data         = {
+        st.session_state.alert_data           = {
             "lots": 133, "buy_price": 533.80, "sell_price": 563.80,
             "spread_entry": 30.0, "profit_net": 3900.0,
             "risk": 399.0, "commission": 26.6, "rr": 9.8,
@@ -274,11 +343,13 @@ with st.sidebar:
 # Инициализация состояния алерта
 # ---------------------------------------------------------------------------
 for _k, _v in [
-    ("alert_active",        False),
-    ("alert_data",          None),
-    ("alert_time",          0.0),
-    ("alert_action",        None),
+    ("alert_active",         False),
+    ("alert_data",           None),
+    ("alert_time",           0.0),
+    ("alert_action",         None),
     ("alert_cooldown_until", 0.0),
+    ("paper_position",       None),
+    ("trade_history",        []),
 ]:
     if _k not in st.session_state:
         st.session_state[_k] = _v
@@ -288,7 +359,7 @@ for _k, _v in [
 # Живой фрагмент — обновляется без перезагрузки страницы
 # ---------------------------------------------------------------------------
 @st.fragment(run_every=refresh_sec)
-def live_dashboard(days: int, tf: int) -> None:
+def live_dashboard(days: int, tf: int, paper: bool = True) -> None:
     now = datetime.now().strftime("%H:%M:%S")
     tf_label = f"{tf} мин · {days} дн."
 
@@ -340,7 +411,25 @@ def live_dashboard(days: int, tf: int) -> None:
             st.session_state.alert_action       = "TIMEOUT"
             st.session_state.alert_cooldown_until = time.time() + ALERT_COOLDOWN_S
 
-    if st.session_state.alert_active:
+    # --- Открыть позицию при подтверждении ---
+    if (st.session_state.alert_action == "APPROVED"
+            and st.session_state.paper_position is None
+            and st.session_state.alert_data is not None):
+        p = st.session_state.alert_data
+        st.session_state.paper_position = {
+            "entry_time":   datetime.now(),
+            "entry_spread": spread_rub,
+            "entry_tatn":   price_tatn,
+            "entry_tatnp":  price_tatnp,
+            "lots":         p["lots"],
+            "commission":   p["commission"],
+        }
+        st.session_state.alert_action = None
+
+    # --- Блок позиции (если открыта) ---
+    if st.session_state.paper_position is not None:
+        _render_position(price_tatn, price_tatnp)
+    elif st.session_state.alert_active:
         _render_alert(code)
     else:
         # Обычная строка сигнала
@@ -350,11 +439,8 @@ def live_dashboard(days: int, tf: int) -> None:
         elif stype == "error":   st.error(label)
         else:                    st.info(label)
 
-        # Результат последнего действия
         action = st.session_state.alert_action
-        if action == "APPROVED":
-            st.success("✅ Вход подтверждён — в v3.0 здесь будут ордера")
-        elif action == "SKIPPED":
+        if action == "SKIPPED":
             st.info("⏭ Сигнал пропущен. Новый алерт через 2 мин.")
         elif action == "TIMEOUT":
             st.warning("⏱ Время истекло — сигнал отменён. Новый алерт через 2 мин.")
@@ -543,6 +629,24 @@ def live_dashboard(days: int, tf: int) -> None:
         "Нижний: ratio TATN/TATNP  |  Zoom/pan синхронный"
     )
 
+    # --- История сделок тренажёра ---
+    history = st.session_state.trade_history
+    if history:
+        st.divider()
+        st.markdown("**📋 История сделок тренажёра**")
+        df_hist = pd.DataFrame(history[::-1])   # новые сверху
+        total   = sum(float(r["P&L ₽"]) for r in history)
+        wins    = sum(1 for r in history if r["Результат"].startswith("✅"))
+        sign    = "+" if total >= 0 else ""
+        st.caption(
+            f"Сделок: {len(history)}  |  "
+            f"Прибыльных: {wins}  |  "
+            f"Итого P&L: **{sign}{total:.0f} ₽**"
+        )
+        st.dataframe(df_hist, use_container_width=True, hide_index=True)
+        if st.button("🗑 Очистить историю", key="btn_clear_history"):
+            st.session_state.trade_history = []
+
 
 # Запускаем живой фрагмент
-live_dashboard(days=days_history, tf=timeframe)
+live_dashboard(days=days_history, tf=timeframe, paper=paper_mode)
