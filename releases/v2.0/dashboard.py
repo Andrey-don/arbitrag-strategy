@@ -256,6 +256,18 @@ with st.sidebar:
     st.divider()
     st.caption("Данные: T-Invest API")
     st.caption("Уровни: bot_spec/01_STRATEGY_RULES.md")
+    st.divider()
+    if st.button("🧪 Тест алерта", use_container_width=True):
+        st.session_state.alert_active       = True
+        st.session_state.alert_time         = time.time()
+        st.session_state.alert_action       = None
+        st.session_state.alert_cooldown_until = 0.0
+        st.session_state.alert_data         = {
+            "lots": 133, "buy_price": 533.80, "sell_price": 563.80,
+            "spread_entry": 30.0, "profit_net": 3900.0,
+            "risk": 399.0, "commission": 26.6, "rr": 9.8,
+        }
+        st.rerun()
 
 
 # ---------------------------------------------------------------------------
