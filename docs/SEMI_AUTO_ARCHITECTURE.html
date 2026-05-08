@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MATS — Архитектура полуавтомата</title>
+<style>
+  :root {
+    --bg:        #0d1117;
+    --bg2:       #161b22;
+    --bg3:       #21262d;
+    --border:    #30363d;
+    --text:      #e6edf3;
+    --muted:     #7d8590;
+    --green:     #3fb950;
+    --green-dim: #1a3a22;
+    --blue:      #58a6ff;
+    --blue-dim:  #0d2149;
+    --orange:    #f78166;
+    --orange-dim:#3d1a12;
+    --yellow:    #e3b341;
+    --yellow-dim:#3d2e00;
+    --purple:    #bc8cff;
+    --purple-dim:#2a1a4a;
+    --red:       #f85149;
+    --red-dim:   #3d0f0e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  a { color: var(--blue); text-decoration: none; }
+
+  /* ─── ШАПКА ─── */
+  .header {
+    background: linear-gradient(135deg, #0d2149 0%, #1a3a22 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 36px 48px 28px;
+  }
+  .header h1 { font-size: 26px; font-weight: 700; margin-bottom: 6px; }
+  .header h1 span { color: var(--green); }
+  .header p { color: var(--muted); font-size: 13px; }
+  .badge {
+    display: inline-block;
+    background: var(--green-dim);
+    color: var(--green);
+    border: 1px solid var(--green);
+    border-radius: 20px;
+    padding: 2px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  .badge.blue  { background: var(--blue-dim);   color: var(--blue);   border-color: var(--blue); }
+  .badge.orange{ background: var(--orange-dim); color: var(--orange); border-color: var(--orange); }
+
+  /* ─── КОНТЕНТ ─── */
+  .page { max-width: 1100px; margin: 0 auto; padding: 40px 24px 80px; }
+  h2 {
+    font-size: 18px; font-weight: 700;
+    color: var(--blue);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+    margin: 48px 0 24px;
+  }
+  h2:first-child { margin-top: 0; }
+
+  /* ─── СХЕМА SVG ─── */
+  .diagram-wrap {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 32px 16px;
+    overflow-x: auto;
+  }
+  .diagram-wrap svg { display: block; margin: 0 auto; }
+
+  /* ─── КАРТОЧКИ КОМПОНЕНТОВ ─── */
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 16px;
+  }
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    transition: border-color .2s, box-shadow .2s;
+  }
+  .card:hover {
+    border-color: var(--blue);
+    box-shadow: 0 0 0 1px var(--blue-dim);
+  }
+  .card-icon { font-size: 28px; margin-bottom: 10px; }
+  .card h3 { font-size: 15px; font-weight: 700; margin-bottom: 8px; }
+  .card p  { color: var(--muted); font-size: 13px; line-height: 1.6; }
+  .card ul { color: var(--muted); font-size: 13px; padding-left: 18px; }
+  .card ul li { margin-bottom: 4px; }
+  .card.green  { border-left: 3px solid var(--green); }
+  .card.blue   { border-left: 3px solid var(--blue); }
+  .card.orange { border-left: 3px solid var(--orange); }
+  .card.yellow { border-left: 3px solid var(--yellow); }
+  .card.purple { border-left: 3px solid var(--purple); }
+
+  /* ─── ALERT MOCKUP ─── */
+  .alert-mockup {
+    background: var(--bg2);
+    border: 2px solid var(--orange);
+    border-radius: 12px;
+    max-width: 520px;
+    overflow: hidden;
+    box-shadow: 0 0 32px rgba(247,129,102,.25);
+    animation: glow 2s ease-in-out infinite alternate;
+  }
+  @keyframes glow {
+    from { box-shadow: 0 0 16px rgba(247,129,102,.2); }
+    to   { box-shadow: 0 0 40px rgba(247,129,102,.5); }
+  }
+  .alert-header {
+    background: var(--orange-dim);
+    border-bottom: 1px solid var(--orange);
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .alert-header .pulse {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--orange);
+    animation: pulse 1s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: .4; transform: scale(.7); }
+  }
+  .alert-header span { font-weight: 700; font-size: 15px; color: var(--orange); }
+  .alert-body { padding: 20px; }
+  .alert-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .alert-row:last-of-type { border-bottom: none; }
+  .alert-row .label { color: var(--muted); font-size: 13px; }
+  .alert-row .value { font-weight: 600; font-size: 14px; }
+  .value.buy    { color: var(--green); }
+  .value.sell   { color: var(--red); }
+  .value.profit { color: var(--yellow); }
+  .value.risk   { color: var(--orange); }
+  .value.rr     { color: var(--blue); }
+  .alert-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 20px;
+  }
+  .btn {
+    padding: 12px 0;
+    border-radius: 8px;
+    border: none;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity .15s, transform .1s;
+  }
+  .btn:hover   { opacity: .85; transform: translateY(-1px); }
+  .btn:active  { transform: translateY(0); }
+  .btn-confirm { background: var(--green);  color: #000; }
+  .btn-skip    { background: var(--bg3);    color: var(--muted); border: 1px solid var(--border); }
+  .timer {
+    text-align: center;
+    color: var(--muted);
+    font-size: 12px;
+    margin-top: 10px;
+  }
+  .timer span { color: var(--orange); font-weight: 600; }
+
+  /* ─── АЛГОРИТМ ─── */
+  .algo {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .algo-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--border);
+    transition: background .15s;
+  }
+  .algo-step:last-child { border-bottom: none; }
+  .algo-step:hover { background: var(--bg3); }
+  .step-num {
+    min-width: 32px; height: 32px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 13px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .step-num.g { background: var(--green-dim);  color: var(--green); }
+  .step-num.b { background: var(--blue-dim);   color: var(--blue); }
+  .step-num.o { background: var(--orange-dim); color: var(--orange); }
+  .step-num.y { background: var(--yellow-dim); color: var(--yellow); }
+  .step-num.p { background: var(--purple-dim); color: var(--purple); }
+  .step-num.r { background: var(--red-dim);    color: var(--red); }
+  .step-body h4 { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+  .step-body p  { color: var(--muted); font-size: 13px; }
+  .step-arrow {
+    display: flex;
+    justify-content: center;
+    padding: 4px 24px;
+    color: var(--muted);
+    font-size: 18px;
+  }
+
+  /* ─── РИСК-РАСЧЁТ ─── */
+  .risk-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--bg2);
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .risk-table th {
+    background: var(--bg3);
+    padding: 12px 16px;
+    text-align: left;
+    font-size: 12px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .05em;
+  }
+  .risk-table td {
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .risk-table td:last-child { color: var(--yellow); font-weight: 600; }
+  .risk-table tr:hover td   { background: var(--bg3); }
+
+  /* ─── ДОРОЖНАЯ КАРТА ─── */
+  .roadmap { display: flex; flex-direction: column; gap: 0; }
+  .rm-item {
+    display: flex;
+    gap: 20px;
+    padding: 20px 0;
+    position: relative;
+  }
+  .rm-item:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    left: 19px; top: 52px;
+    width: 2px;
+    height: calc(100% - 20px);
+    background: var(--border);
+  }
+  .rm-dot {
+    min-width: 40px; height: 40px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 1;
+  }
+  .rm-dot.done   { background: var(--green-dim);  color: var(--green);  border: 2px solid var(--green); }
+  .rm-dot.next   { background: var(--blue-dim);   color: var(--blue);   border: 2px solid var(--blue);  box-shadow: 0 0 12px var(--blue-dim); }
+  .rm-dot.future { background: var(--bg3);        color: var(--muted);  border: 2px solid var(--border); }
+  .rm-body h4 { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+  .rm-body p  { color: var(--muted); font-size: 13px; }
+  .rm-body ul { color: var(--muted); font-size: 13px; padding-left: 16px; margin-top: 4px; }
+  .rm-body ul li { margin-bottom: 2px; }
+
+  /* ─── CODE ─── */
+  code {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 12px;
+    color: var(--purple);
+  }
+</style>
+</head>
+<body>
+
+<!-- ШАПКА -->
+<div class="header">
+  <h1>📈 MATS — <span>Архитектура полуавтомата</span></h1>
+  <p style="margin-top:8px">
+    <span class="badge">v2.0 — следующий</span>
+    <span class="badge blue">TATN / TATNP</span>
+    <span class="badge orange">T-Invest API</span>
+  </p>
+  <p style="margin-top:10px; color: var(--muted)">
+    MOEX Arbitrage Trading System · Режим: система находит сигнал → трейдер подтверждает → система исполняет
+  </p>
+</div>
+
+<div class="page">
+
+  <!-- СХЕМА ПОТОКА -->
+  <h2>Схема потока данных</h2>
+  <div class="diagram-wrap">
+    <svg width="960" height="380" viewBox="0 0 960 380" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arr-blue"   markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0,10 3.5,0 7" fill="#58a6ff"/>
+        </marker>
+        <marker id="arr-green"  markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0,10 3.5,0 7" fill="#3fb950"/>
+        </marker>
+        <marker id="arr-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0,10 3.5,0 7" fill="#f78166"/>
+        </marker>
+        <marker id="arr-yellow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0,10 3.5,0 7" fill="#e3b341"/>
+        </marker>
+        <marker id="arr-red"    markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0,10 3.5,0 7" fill="#f85149"/>
+        </marker>
+        <filter id="glow-g"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        <filter id="glow-b"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      </defs>
+
+      <!-- ─── БЛОК 1: T-Invest API ─── -->
+      <rect x="20" y="30" width="140" height="60" rx="8" fill="#0d2149" stroke="#58a6ff" stroke-width="1.5"/>
+      <text x="90" y="56" text-anchor="middle" fill="#58a6ff" font-size="11" font-weight="700">T-Invest</text>
+      <text x="90" y="72" text-anchor="middle" fill="#7d8590" font-size="10">REST API</text>
+      <text x="90" y="86" text-anchor="middle" fill="#7d8590" font-size="9">GetLastPrices · GetCandles</text>
+
+      <!-- ─── БЛОК 2: Monitor ─── -->
+      <rect x="220" y="30" width="140" height="60" rx="8" fill="#1a3a22" stroke="#3fb950" stroke-width="1.5"/>
+      <text x="290" y="56" text-anchor="middle" fill="#3fb950" font-size="11" font-weight="700">Monitor</text>
+      <text x="290" y="72" text-anchor="middle" fill="#7d8590" font-size="10">каждые 5 сек</text>
+      <text x="290" y="86" text-anchor="middle" fill="#7d8590" font-size="9">TATN · TATNP · свечи</text>
+
+      <!-- ─── БЛОК 3: Signal Engine ─── -->
+      <rect x="420" y="30" width="150" height="60" rx="8" fill="#2a1a4a" stroke="#bc8cff" stroke-width="1.5"/>
+      <text x="495" y="56" text-anchor="middle" fill="#bc8cff" font-size="11" font-weight="700">Signal Engine</text>
+      <text x="495" y="72" text-anchor="middle" fill="#7d8590" font-size="10">спред · ratio · z-score</text>
+      <text x="495" y="86" text-anchor="middle" fill="#7d8590" font-size="9">вход / выход / нет сигнала</text>
+
+      <!-- ─── БЛОК 4: Alert Panel ─── -->
+      <rect x="630" y="30" width="150" height="60" rx="8" fill="#3d1a12" stroke="#f78166" stroke-width="2"/>
+      <text x="705" y="56" text-anchor="middle" fill="#f78166" font-size="11" font-weight="700">🚨 Alert Panel</text>
+      <text x="705" y="72" text-anchor="middle" fill="#7d8590" font-size="10">мигает · параметры</text>
+      <text x="705" y="86" text-anchor="middle" fill="#7d8590" font-size="9">риск · прибыль · R/R</text>
+
+      <!-- ─── КНОПКИ ─── -->
+      <rect x="630" y="140" width="68" height="36" rx="6" fill="#1a3a22" stroke="#3fb950" stroke-width="1.5"/>
+      <text x="664" y="163" text-anchor="middle" fill="#3fb950" font-size="11" font-weight="700">✅ ДА</text>
+
+      <rect x="712" y="140" width="68" height="36" rx="6" fill="#21262d" stroke="#30363d" stroke-width="1.5"/>
+      <text x="746" y="163" text-anchor="middle" fill="#7d8590" font-size="11">❌ НЕТ</text>
+
+      <!-- ─── БЛОК 5: Order Executor ─── -->
+      <rect x="420" y="220" width="150" height="60" rx="8" fill="#3d2e00" stroke="#e3b341" stroke-width="1.5"/>
+      <text x="495" y="246" text-anchor="middle" fill="#e3b341" font-size="11" font-weight="700">Order Executor</text>
+      <text x="495" y="262" text-anchor="middle" fill="#7d8590" font-size="10">asyncio.gather</text>
+      <text x="495" y="276" text-anchor="middle" fill="#7d8590" font-size="9">buy_leg + sell_leg одновременно</text>
+
+      <!-- ─── БЛОК 6: Position Tracker ─── -->
+      <rect x="220" y="220" width="140" height="60" rx="8" fill="#3d0f0e" stroke="#f85149" stroke-width="1.5"/>
+      <text x="290" y="246" text-anchor="middle" fill="#f85149" font-size="11" font-weight="700">Position Tracker</text>
+      <text x="290" y="262" text-anchor="middle" fill="#7d8590" font-size="10">P&amp;L · стоп · тейк</text>
+      <text x="290" y="276" text-anchor="middle" fill="#7d8590" font-size="9">время в позиции</text>
+
+      <!-- ─── БЛОК 7: Logs ─── -->
+      <rect x="20" y="220" width="140" height="60" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
+      <text x="90" y="246" text-anchor="middle" fill="#7d8590" font-size="11" font-weight="700">Logs</text>
+      <text x="90" y="262" text-anchor="middle" fill="#7d8590" font-size="10">trades.csv</text>
+      <text x="90" y="276" text-anchor="middle" fill="#7d8590" font-size="9">время · цены · P&amp;L</text>
+
+      <!-- ─── СТРЕЛКИ ВЕРХНЕГО РЯДА ─── -->
+      <!-- T-Invest → Monitor -->
+      <line x1="161" y1="60" x2="218" y2="60" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#arr-blue)"/>
+      <text x="189" y="55" text-anchor="middle" fill="#7d8590" font-size="9">JSON</text>
+
+      <!-- Monitor → Signal Engine -->
+      <line x1="361" y1="60" x2="418" y2="60" stroke="#3fb950" stroke-width="1.5" marker-end="url(#arr-green)"/>
+      <text x="389" y="55" text-anchor="middle" fill="#7d8590" font-size="9">цены</text>
+
+      <!-- Signal Engine → Alert Panel -->
+      <line x1="571" y1="60" x2="628" y2="60" stroke="#bc8cff" stroke-width="1.5" marker-end="url(#arr-orange)"/>
+      <text x="599" y="55" text-anchor="middle" fill="#7d8590" font-size="9">сигнал</text>
+
+      <!-- Alert Panel → кнопки (вниз) -->
+      <line x1="705" y1="91" x2="705" y2="138" stroke="#f78166" stroke-width="1.5" marker-end="url(#arr-orange)"/>
+
+      <!-- ДА → Order Executor (диагональ) -->
+      <path d="M664 177 Q620 200 570 225" stroke="#3fb950" stroke-width="1.5" fill="none" marker-end="url(#arr-green)"/>
+      <text x="610" y="197" text-anchor="middle" fill="#3fb950" font-size="9" font-weight="600">РАЗРЕШИТЬ</text>
+
+      <!-- Order Executor → Position Tracker -->
+      <line x1="419" y1="250" x2="362" y2="250" stroke="#e3b341" stroke-width="1.5" marker-end="url(#arr-yellow)"/>
+      <text x="390" y="245" text-anchor="middle" fill="#7d8590" font-size="9">ордера</text>
+
+      <!-- Position Tracker → Logs -->
+      <line x1="219" y1="250" x2="162" y2="250" stroke="#f85149" stroke-width="1.5" marker-end="url(#arr-red)"/>
+      <text x="190" y="245" text-anchor="middle" fill="#7d8590" font-size="9">запись</text>
+
+      <!-- DRY_RUN label -->
+      <rect x="790" y="218" width="150" height="64" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1" stroke-dasharray="4,3"/>
+      <text x="865" y="241" text-anchor="middle" fill="#7d8590" font-size="10" font-weight="700">DRY_RUN=true</text>
+      <text x="865" y="257" text-anchor="middle" fill="#7d8590" font-size="9">ордера логируются,</text>
+      <text x="865" y="271" text-anchor="middle" fill="#7d8590" font-size="9">но НЕ отправляются</text>
+      <line x1="571" y1="250" x2="788" y2="250" stroke="#30363d" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr-red)"/>
+
+      <!-- Легенда -->
+      <rect x="20" y="320" width="920" height="44" rx="6" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+      <line x1="40"  y1="342" x2="70"  y2="342" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#arr-blue)"/>
+      <text x="80" y="346" fill="#7d8590" font-size="10">данные</text>
+      <line x1="140" y1="342" x2="170" y2="342" stroke="#3fb950" stroke-width="1.5" marker-end="url(#arr-green)"/>
+      <text x="180" y="346" fill="#7d8590" font-size="10">поток (авто)</text>
+      <line x1="270" y1="342" x2="300" y2="342" stroke="#f78166" stroke-width="1.5" marker-end="url(#arr-orange)"/>
+      <text x="310" y="346" fill="#7d8590" font-size="10">сигнал / алерт</text>
+      <line x1="410" y1="342" x2="440" y2="342" stroke="#e3b341" stroke-width="1.5" marker-end="url(#arr-yellow)"/>
+      <text x="450" y="346" fill="#7d8590" font-size="10">после подтверждения</text>
+      <line x1="590" y1="342" x2="620" y2="342" stroke="#30363d" stroke-width="1" stroke-dasharray="4,3"/>
+      <text x="630" y="346" fill="#7d8590" font-size="10">тест-режим (DRY_RUN)</text>
+    </svg>
+  </div>
+
+  <!-- КОМПОНЕНТЫ -->
+  <h2>Компоненты системы</h2>
+  <div class="cards">
+
+    <div class="card green">
+      <div class="card-icon">📡</div>
+      <h3>Monitor</h3>
+      <ul>
+        <li>Опрашивает T-Invest API каждые <code>5 сек</code></li>
+        <li><code>GetLastPrices</code> — TATN + TATNP</li>
+        <li><code>GetCandles</code> — история для контекста</li>
+        <li>Передаёт данные в Signal Engine</li>
+      </ul>
+    </div>
+
+    <div class="card purple">
+      <div class="card-icon">🧠</div>
+      <h3>Signal Engine</h3>
+      <ul>
+        <li>Спред = TATN − TATNP (руб.)</li>
+        <li>Ratio = TATN / TATNP</li>
+        <li>Z-score — статистическое отклонение от нормы</li>
+        <li>Тренд спреда — разворот / рост / спад</li>
+        <li>Выход: LONG_SCALP · LONG_GOOD · EXIT · нет</li>
+      </ul>
+    </div>
+
+    <div class="card orange">
+      <div class="card-icon">🚨</div>
+      <h3>Alert Panel</h3>
+      <ul>
+        <li>Мигающий блок поверх дашборда</li>
+        <li>Параметры: цены, лоты, стоп, прибыль, R/R</li>
+        <li>Кнопки: <b style="color:#3fb950">✅ РАЗРЕШИТЬ</b> / <b style="color:#7d8590">❌ ПРОПУСТИТЬ</b></li>
+        <li>Таймаут 30 сек → автоотмена</li>
+        <li>Опционально: звуковой сигнал</li>
+      </ul>
+    </div>
+
+    <div class="card yellow">
+      <div class="card-icon">⚡</div>
+      <h3>Order Executor</h3>
+      <ul>
+        <li><code>asyncio.gather(buy_leg, sell_leg)</code></li>
+        <li>Обе ноги одновременно — железное правило</li>
+        <li>T-Invest API: <code>PostOrder</code></li>
+        <li>Тип: лимитный или рыночный</li>
+        <li><code>DRY_RUN=true</code> — только лог, без отправки</li>
+      </ul>
+    </div>
+
+    <div class="card blue">
+      <div class="card-icon">📊</div>
+      <h3>Position Tracker</h3>
+      <ul>
+        <li>P&amp;L в реальном времени (руб. и %)</li>
+        <li>Текущий спред vs спред входа</li>
+        <li>Стоп-лосс: авто при −2% депо</li>
+        <li>Тейк-профит: алерт → <b style="color:#3fb950">ЗАКРЫТЬ</b></li>
+        <li>Счётчик времени в позиции</li>
+      </ul>
+    </div>
+
+    <div class="card" style="border-left:3px solid #7d8590">
+      <div class="card-icon">📁</div>
+      <h3>Logs</h3>
+      <ul>
+        <li>Файл <code>logs/trades.csv</code></li>
+        <li>Каждая сделка: время входа/выхода</li>
+        <li>Цены обеих ног, лотность</li>
+        <li>P&amp;L, причина закрытия</li>
+        <li>Основа для анализа стратегии</li>
+      </ul>
+    </div>
+
+  </div>
+
+  <!-- ALERT MOCKUP -->
+  <h2>Как выглядит Alert Panel</h2>
+  <div style="display:flex; gap:40px; align-items:flex-start; flex-wrap:wrap">
+    <div class="alert-mockup">
+      <div class="alert-header">
+        <div class="pulse"></div>
+        <span>🚨 СИГНАЛ: LONG SCALP</span>
+      </div>
+      <div class="alert-body">
+        <div class="alert-row">
+          <span class="label">Купить TATNP</span>
+          <span class="value buy">533.80 ₽ × 3 лота</span>
+        </div>
+        <div class="alert-row">
+          <span class="label">Продать TATN</span>
+          <span class="value sell">563.80 ₽ × 3 лота</span>
+        </div>
+        <div class="alert-row">
+          <span class="label">Спред сейчас</span>
+          <span class="value">30.0 ₽</span>
+        </div>
+        <div class="alert-row">
+          <span class="label">Цель выхода (схождение)</span>
+          <span class="value">0.5 ₽</span>
+        </div>
+        <div class="alert-row">
+          <span class="label">Прогноз прибыли</span>
+          <span class="value profit">+87.9 ₽</span>
+        </div>
+        <div class="alert-row">
+          <span class="label">Стоп-лосс (−2% депо)</span>
+          <span class="value risk">−200 ₽</span>
+        </div>
+        <div class="alert-row">
+          <span class="label">Соотношение R/R</span>
+          <span class="value rr">1 : 3.0</span>
+        </div>
+        <div class="alert-buttons">
+          <button class="btn btn-confirm">✅ РАЗРЕШИТЬ</button>
+          <button class="btn btn-skip">❌ ПРОПУСТИТЬ</button>
+        </div>
+        <div class="timer">Автоотмена через <span id="timer">30</span> сек</div>
+      </div>
+    </div>
+
+    <div style="flex:1; min-width:260px">
+      <p style="color:var(--muted); font-size:13px; line-height:1.8">
+        <b style="color:var(--text)">Что означает каждое поле:</b><br><br>
+        <b style="color:var(--green)">Купить TATNP</b> — покупаем дешёвую ногу (прив.)<br>
+        <b style="color:var(--red)">Продать TATN</b> — шортим дорогую ногу (обычку)<br><br>
+        <b style="color:var(--text)">Спред</b> — текущая разница цен. Ждём схождения к 0–0.5 ₽<br><br>
+        <b style="color:var(--yellow)">Прогноз</b> — (спред − 0.5) × лоты − комиссии<br><br>
+        <b style="color:var(--orange)">Стоп</b> — фиксированный риск по депо (не по цене инструмента)<br><br>
+        <b style="color:var(--blue)">R/R</b> — соотношение риска к прибыли. Ниже 1:2 — не входить.<br><br>
+        <b style="color:var(--orange)">Таймаут 30 сек</b> — если не нажал, сигнал снимается. Нет времени — нет сделки.
+      </p>
+    </div>
+  </div>
+
+  <!-- АЛГОРИТМ ШАГОВ -->
+  <h2>Алгоритм работы — шаг за шагом</h2>
+  <div class="algo">
+    <div class="algo-step">
+      <div class="step-num g">1</div>
+      <div class="step-body">
+        <h4>Monitor: получить цены</h4>
+        <p>Каждые 5 сек → T-Invest <code>GetLastPrices</code> для TATN и TATNP.
+           Параллельно <code>GetCandles</code> за N минут для исторического контекста.</p>
+      </div>
+    </div>
+    <div class="algo-step">
+      <div class="step-num b">2</div>
+      <div class="step-body">
+        <h4>Signal Engine: вычислить показатели</h4>
+        <p>Спред, Ratio, Z-score за последние 50 свечей, тренд спреда.
+           Если спред ≥ 5 руб. + ratio ≥ 1.008 + z-score > 1.5 → генерировать сигнал.</p>
+      </div>
+    </div>
+    <div class="algo-step">
+      <div class="step-num o">3</div>
+      <div class="step-body">
+        <h4>Alert Panel: показать параметры</h4>
+        <p>Рассчитать лотность (риск-менеджмент), прогноз прибыли, R/R.
+           Показать мигающий блок. Запустить таймер 30 сек.</p>
+      </div>
+    </div>
+    <div class="algo-step">
+      <div class="step-num g">4а</div>
+      <div class="step-body">
+        <h4>Трейдер нажимает РАЗРЕШИТЬ → Order Executor</h4>
+        <p><code>asyncio.gather(buy_TATNP, sell_TATN)</code> — обе ноги одновременно.
+           Лимитные ордера на bid/ask. Логировать в <code>trades.csv</code>.</p>
+      </div>
+    </div>
+    <div class="algo-step">
+      <div class="step-num r">4б</div>
+      <div class="step-body">
+        <h4>Трейдер нажимает ПРОПУСТИТЬ или истёк таймаут</h4>
+        <p>Сигнал отменяется. Система продолжает мониторинг. Запись в лог: «сигнал отклонён».</p>
+      </div>
+    </div>
+    <div class="algo-step">
+      <div class="step-num y">5</div>
+      <div class="step-body">
+        <h4>Position Tracker: вести позицию</h4>
+        <p>Показывать P&amp;L каждые 5 сек. Отслеживать спред: цель схождения 0.5 ₽.
+           При достижении тейк-профита → алерт ЗАКРЫТЬ.</p>
+      </div>
+    </div>
+    <div class="algo-step">
+      <div class="step-num p">6</div>
+      <div class="step-body">
+        <h4>Выход из позиции</h4>
+        <p><b style="color:#3fb950">Тейк:</b> алерт трейдеру → [ЗАКРЫТЬ] → <code>asyncio.gather(close_buy, close_sell)</code>.<br>
+           <b style="color:#f85149">Стоп:</b> автоматически при −2% депо (без подтверждения). Безопасность важнее.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- РАСЧЁТ РИСКА -->
+  <h2>Расчёт параметров входа (риск-менеджмент по Виктору)</h2>
+  <table class="risk-table">
+    <thead>
+      <tr>
+        <th>Параметр</th>
+        <th>Формула</th>
+        <th>Пример (депо 10 000 ₽)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Макс. просадка</td>
+        <td>20% от депо</td>
+        <td>2 000 ₽</td>
+      </tr>
+      <tr>
+        <td>Частей входа</td>
+        <td>5 частей (усреднение)</td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td>Риск на 1 сделку</td>
+        <td>просадка / 5</td>
+        <td>400 ₽</td>
+      </tr>
+      <tr>
+        <td>Стоп-лосс (спред)</td>
+        <td>вход + 3 руб.</td>
+        <td>33.0 ₽ (если вошли при 30)</td>
+      </tr>
+      <tr>
+        <td>Лотность</td>
+        <td>риск / (стоп × 1 лот)</td>
+        <td>400 / (3 × 1) ≈ 133 лота</td>
+      </tr>
+      <tr>
+        <td>Тейк-профит</td>
+        <td>стоп × 3 (R/R = 1:3)</td>
+        <td>9 руб. схождения → 0.5 ₽</td>
+      </tr>
+      <tr>
+        <td>Прогноз прибыли</td>
+        <td>(спред − 0.5) × лоты − комиссии</td>
+        <td>≈ +1 200 ₽ (без гарантий)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ДОРОЖНАЯ КАРТА -->
+  <h2>Дорожная карта версий</h2>
+  <div class="roadmap">
+
+    <div class="rm-item">
+      <div class="rm-dot done">v1</div>
+      <div class="rm-body">
+        <h4>v1.0 — Мониторинг <span class="badge" style="font-size:10px">✅ готово</span></h4>
+        <ul>
+          <li>Цены TATN / TATNP в реальном времени (T-Invest API)</li>
+          <li>3 синхронных графика: цены, спред%, ratio</li>
+          <li>Сигналы — только отображение, без действий</li>
+          <li>start_dashboard.bat — независимый запуск</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="rm-item">
+      <div class="rm-dot next">v2</div>
+      <div class="rm-body">
+        <h4>v2.0 — Alert Panel + кнопка «Разрешить» <span class="badge blue" style="font-size:10px">следующий</span></h4>
+        <ul>
+          <li>Мигающий Alert Panel при сигнале</li>
+          <li>Расчёт лотности, прибыли, R/R прямо в интерфейсе</li>
+          <li>Кнопки РАЗРЕШИТЬ / ПРОПУСТИТЬ + таймаут 30 сек</li>
+          <li>Ордера ещё не выставляются — только UI</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="rm-item">
+      <div class="rm-dot future">v2.1</div>
+      <div class="rm-body">
+        <h4>v2.1 — Умный Signal Engine</h4>
+        <ul>
+          <li>Z-score: статистическая оценка отклонения</li>
+          <li>Тренд спреда: только при развороте</li>
+          <li>Фильтр по времени суток (вечерняя сессия приоритет)</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="rm-item">
+      <div class="rm-dot future">v3</div>
+      <div class="rm-body">
+        <h4>v3.0 — Order Executor</h4>
+        <ul>
+          <li>Реальное выставление ордеров через T-Invest API</li>
+          <li>asyncio.gather — обе ноги одновременно</li>
+          <li>DRY_RUN режим обязателен до тестирования</li>
+          <li>Логирование всех сделок в CSV</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="rm-item">
+      <div class="rm-dot future">v3.1</div>
+      <div class="rm-body">
+        <h4>v3.1 — Position Tracker</h4>
+        <ul>
+          <li>P&amp;L в реальном времени</li>
+          <li>Авто-стоп при −2% депо</li>
+          <li>Алерт тейк-профита</li>
+          <li>История сделок прямо в дашборде</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="rm-item">
+      <div class="rm-dot future">v4</div>
+      <div class="rm-body">
+        <h4>v4.0 — Полный автомат (опционально)</h4>
+        <ul>
+          <li>Только после 50+ успешных сделок в полуавтомате</li>
+          <li>Строгие лимиты: макс. N сделок в день, макс. риск</li>
+          <li>Telegram-уведомления о каждой сделке</li>
+        </ul>
+      </div>
+    </div>
+
+  </div>
+
+</div><!-- /page -->
+
+<script>
+  // Таймер обратного отсчёта в мокапе
+  let t = 30;
+  const el = document.getElementById('timer');
+  setInterval(() => {
+    t = t > 0 ? t - 1 : 30;
+    el.textContent = t;
+    el.style.color = t <= 10 ? '#f85149' : '#f78166';
+  }, 1000);
+</script>
+</body>
+</html>
