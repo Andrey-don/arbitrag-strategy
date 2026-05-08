@@ -302,7 +302,7 @@
 <div class="header">
   <h1>📈 MATS — <span>Архитектура полуавтомата</span></h1>
   <p style="margin-top:8px">
-    <span class="badge">v2.0 — готово ✅</span>
+    <span class="badge">v3.0 — следующий 🔨</span>
     <span class="badge blue">TATN / TATNP</span>
     <span class="badge orange">T-Invest API</span>
   </p>
@@ -316,7 +316,7 @@
   <!-- СХЕМА ПОТОКА -->
   <h2>Схема потока данных</h2>
   <div class="diagram-wrap">
-    <svg width="960" height="380" viewBox="0 0 960 380" xmlns="http://www.w3.org/2000/svg">
+    <svg width="960" height="480" viewBox="0 0 960 480" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <marker id="arr-blue"   markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
           <polygon points="0 0,10 3.5,0 7" fill="#58a6ff"/>
@@ -402,9 +402,42 @@
       <!-- Alert Panel → кнопки (вниз) -->
       <line x1="705" y1="91" x2="705" y2="138" stroke="#f78166" stroke-width="1.5" marker-end="url(#arr-orange)"/>
 
-      <!-- ДА → Order Executor (диагональ) -->
-      <path d="M664 177 Q620 200 570 225" stroke="#3fb950" stroke-width="1.5" fill="none" marker-end="url(#arr-green)"/>
-      <text x="610" y="197" text-anchor="middle" fill="#3fb950" font-size="9" font-weight="600">РАЗРЕШИТЬ</text>
+      <!-- ─── ТУМБЛЕР ТРЕНАЖЁР ─── -->
+      <rect x="630" y="195" width="150" height="30" rx="6" fill="#1a3a22" stroke="#3fb950" stroke-width="1.5"/>
+      <text x="705" y="215" text-anchor="middle" fill="#3fb950" font-size="10" font-weight="700">📋 Тренажёр ВКЛ?</text>
+
+      <!-- Alert → тумблер -->
+      <line x1="705" y1="91" x2="705" y2="138" stroke="#f78166" stroke-width="1.5" marker-end="url(#arr-orange)"/>
+      <!-- тумблер ДА/НЕТ кнопки -->
+      <line x1="705" y1="177" x2="705" y2="193" stroke="#f78166" stroke-width="1" marker-end="url(#arr-orange)"/>
+
+      <!-- ─── ВЕТКА A: ТРЕНАЖЁР (ДА) ─── -->
+      <!-- тумблер → Paper Trading блок -->
+      <rect x="490" y="290" width="150" height="60" rx="8" fill="#0d2149" stroke="#58a6ff" stroke-width="2"/>
+      <text x="565" y="315" text-anchor="middle" fill="#58a6ff" font-size="11" font-weight="700">📋 Тренажёр</text>
+      <text x="565" y="330" text-anchor="middle" fill="#7d8590" font-size="10">P&amp;L на реальных ценах</text>
+      <text x="565" y="344" text-anchor="middle" fill="#7d8590" font-size="9">без реальных денег</text>
+
+      <path d="M680 210 Q620 250 642 295" stroke="#58a6ff" stroke-width="1.5" fill="none" stroke-dasharray="5,3" marker-end="url(#arr-blue)"/>
+      <text x="630" y="258" text-anchor="middle" fill="#58a6ff" font-size="9">ВКЛ</text>
+
+      <!-- Тренажёр → Logs -->
+      <line x1="489" y1="320" x2="162" y2="270" stroke="#58a6ff" stroke-width="1" fill="none" stroke-dasharray="4,3" marker-end="url(#arr-blue)"/>
+
+      <!-- ─── ВЕТКА B: РЕАЛЬНЫЕ ОРДЕРА (ВЫКЛ) ─── -->
+      <!-- тумблер → DRY_RUN check → Order Executor -->
+      <rect x="730" y="290" width="150" height="60" rx="8" fill="#3d2e00" stroke="#e3b341" stroke-width="1.5"/>
+      <text x="805" y="313" text-anchor="middle" fill="#e3b341" font-size="10" font-weight="700">🛡️ DRY_RUN=true?</text>
+      <text x="805" y="329" text-anchor="middle" fill="#7d8590" font-size="9">true → только лог</text>
+      <text x="805" y="343" text-anchor="middle" fill="#7d8590" font-size="9">false → реальный ордер</text>
+
+      <path d="M730 210 Q760 250 760 288" stroke="#e3b341" stroke-width="1.5" fill="none" marker-end="url(#arr-yellow)"/>
+      <text x="762" y="258" text-anchor="middle" fill="#e3b341" font-size="9">ВЫКЛ</text>
+
+      <!-- DRY_RUN → Order Executor (при false) -->
+      <rect x="420" y="220" width="150" height="60" rx="8" fill="#3d2e00" stroke="#e3b341" stroke-width="1.5"/>
+      <path d="M730 320 Q600 360 572 282" stroke="#e3b341" stroke-width="1.5" fill="none" marker-end="url(#arr-yellow)"/>
+      <text x="640" y="370" text-anchor="middle" fill="#e3b341" font-size="9">DRY_RUN=false</text>
 
       <!-- Order Executor → Position Tracker -->
       <line x1="419" y1="250" x2="362" y2="250" stroke="#e3b341" stroke-width="1.5" marker-end="url(#arr-yellow)"/>
@@ -414,25 +447,34 @@
       <line x1="219" y1="250" x2="162" y2="250" stroke="#f85149" stroke-width="1.5" marker-end="url(#arr-red)"/>
       <text x="190" y="245" text-anchor="middle" fill="#7d8590" font-size="9">запись</text>
 
-      <!-- DRY_RUN label -->
-      <rect x="790" y="218" width="150" height="64" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1" stroke-dasharray="4,3"/>
-      <text x="865" y="241" text-anchor="middle" fill="#7d8590" font-size="10" font-weight="700">DRY_RUN=true</text>
-      <text x="865" y="257" text-anchor="middle" fill="#7d8590" font-size="9">ордера логируются,</text>
-      <text x="865" y="271" text-anchor="middle" fill="#7d8590" font-size="9">но НЕ отправляются</text>
-      <line x1="571" y1="250" x2="788" y2="250" stroke="#30363d" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr-red)"/>
+      <!-- Тренажёр → Logs (тоже пишет историю) -->
+
+      <!-- ─── 4 БАРЬЕРА ЗАЩИТЫ ─── -->
+      <rect x="20" y="385" width="920" height="70" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+      <text x="480" y="403" text-anchor="middle" fill="#7d8590" font-size="10" font-weight="700">🛡️ 4 БАРЬЕРА ЗАЩИТЫ ОТ СЛУЧАЙНЫХ ОРДЕРОВ</text>
+      <rect x="35"  y="410" width="200" height="34" rx="5" fill="#3d2e00" stroke="#e3b341" stroke-width="1"/>
+      <text x="135" y="424" text-anchor="middle" fill="#e3b341" font-size="10" font-weight="700">1. DRY_RUN=true</text>
+      <text x="135" y="437" text-anchor="middle" fill="#7d8590" font-size="9">в файле .env (главный)</text>
+      <rect x="245" y="410" width="200" height="34" rx="5" fill="#1a3a22" stroke="#3fb950" stroke-width="1"/>
+      <text x="345" y="424" text-anchor="middle" fill="#3fb950" font-size="10" font-weight="700">2. Тумблер Тренажёр</text>
+      <text x="345" y="437" text-anchor="middle" fill="#7d8590" font-size="9">в sidebar дашборда</text>
+      <rect x="455" y="410" width="200" height="34" rx="5" fill="#0d2149" stroke="#58a6ff" stroke-width="1"/>
+      <text x="555" y="424" text-anchor="middle" fill="#58a6ff" font-size="10" font-weight="700">3. Нулевые лоты</text>
+      <text x="555" y="437" text-anchor="middle" fill="#7d8590" font-size="9">в CScalp стакане</text>
+      <rect x="665" y="410" width="260" height="34" rx="5" fill="#21262d" stroke="#30363d" stroke-width="1"/>
+      <text x="795" y="424" text-anchor="middle" fill="#7d8590" font-size="10" font-weight="700">4. v3.0 ещё не написан</text>
+      <text x="795" y="437" text-anchor="middle" fill="#7d8590" font-size="9">PostOrder код не реализован</text>
 
       <!-- Легенда -->
-      <rect x="20" y="320" width="920" height="44" rx="6" fill="#161b22" stroke="#30363d" stroke-width="1"/>
-      <line x1="40"  y1="342" x2="70"  y2="342" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#arr-blue)"/>
-      <text x="80" y="346" fill="#7d8590" font-size="10">данные</text>
-      <line x1="140" y1="342" x2="170" y2="342" stroke="#3fb950" stroke-width="1.5" marker-end="url(#arr-green)"/>
-      <text x="180" y="346" fill="#7d8590" font-size="10">поток (авто)</text>
-      <line x1="270" y1="342" x2="300" y2="342" stroke="#f78166" stroke-width="1.5" marker-end="url(#arr-orange)"/>
-      <text x="310" y="346" fill="#7d8590" font-size="10">сигнал / алерт</text>
-      <line x1="410" y1="342" x2="440" y2="342" stroke="#e3b341" stroke-width="1.5" marker-end="url(#arr-yellow)"/>
-      <text x="450" y="346" fill="#7d8590" font-size="10">после подтверждения</text>
-      <line x1="590" y1="342" x2="620" y2="342" stroke="#30363d" stroke-width="1" stroke-dasharray="4,3"/>
-      <text x="630" y="346" fill="#7d8590" font-size="10">тест-режим (DRY_RUN)</text>
+      <rect x="20" y="460" width="920" height="14" rx="4" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+      <line x1="30" y1="467" x2="55" y2="467" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#arr-blue)"/>
+      <text x="60" y="470" fill="#7d8590" font-size="9">тренажёр</text>
+      <line x1="130" y1="467" x2="155" y2="467" stroke="#e3b341" stroke-width="1.5" marker-end="url(#arr-yellow)"/>
+      <text x="160" y="470" fill="#7d8590" font-size="9">реальные ордера</text>
+      <line x1="260" y1="467" x2="285" y2="467" stroke="#f78166" stroke-width="1.5" marker-end="url(#arr-orange)"/>
+      <text x="290" y="470" fill="#7d8590" font-size="9">сигнал/алерт</text>
+      <line x1="370" y1="467" x2="395" y2="467" stroke="#30363d" stroke-width="1" stroke-dasharray="4,3"/>
+      <text x="400" y="470" fill="#7d8590" font-size="9">DRY_RUN блок</text>
     </svg>
   </div>
 
@@ -496,6 +538,19 @@
         <li>Стоп-лосс: авто при −2% депо</li>
         <li>Тейк-профит: алерт → <b style="color:#3fb950">ЗАКРЫТЬ</b></li>
         <li>Счётчик времени в позиции</li>
+      </ul>
+    </div>
+
+    <div class="card blue">
+      <div class="card-icon">📋</div>
+      <h3>Тренажёр (Paper Trading)</h3>
+      <ul>
+        <li>Тумблер в sidebar — включён по умолчанию</li>
+        <li>РАЗРЕШИТЬ → виртуальная позиция на реальных ценах</li>
+        <li>P&amp;L обновляется каждые 5 сек</li>
+        <li>Кнопка ЗАКРЫТЬ → фиксирует результат</li>
+        <li>История сделок с итогом и winrate</li>
+        <li><b style="color:#3fb950">Реальных денег нет — только обучение</b></li>
       </ul>
     </div>
 
@@ -602,9 +657,17 @@
     <div class="algo-step">
       <div class="step-num g">4а</div>
       <div class="step-body">
-        <h4>Трейдер нажимает РАЗРЕШИТЬ → Order Executor</h4>
-        <p><code>asyncio.gather(buy_TATNP, sell_TATN)</code> — обе ноги одновременно.
-           Лимитные ордера на bid/ask. Логировать в <code>trades.csv</code>.</p>
+        <h4>Трейдер нажимает РАЗРЕШИТЬ → ветвление по режиму</h4>
+        <p>
+          <b style="color:#58a6ff">📋 Тренажёр ВКЛ</b> — открывается виртуальная позиция.
+          P&amp;L считается по реальным котировкам. Реальных денег нет.<br><br>
+          <b style="color:#e3b341">📋 Тренажёр ВЫКЛ + DRY_RUN=false</b> —
+          <code>asyncio.gather(buy_TATNP, sell_TATN)</code> → реальные ордера в T-Invest.
+          Сразу после — <code>PostStopOrder</code> на сервер (защита от обрыва интернета).
+          Логировать в <code>trades.csv</code>.<br><br>
+          <b style="color:#e3b341">📋 Тренажёр ВЫКЛ + DRY_RUN=true</b> —
+          ордера только логируются, не отправляются. Жёлтый баннер в sidebar.
+        </p>
       </div>
     </div>
     <div class="algo-step">
