@@ -1,5 +1,5 @@
 ---
-updated: 2026-05-08 (Dashboard v2: двойная ось, пагинация ISS, зум, T-Invest следующий)
+updated: 2026-05-08 (Dashboard v3: T-Invest API, релизы, архитектура полуавтомата)
 ---
 
 # SESSION BRIEF — Арбитражный бот (читать первым)
@@ -108,14 +108,17 @@ updated: 2026-05-08 (Dashboard v2: двойная ось, пагинация ISS
 
 ## Следующий шаг
 
-**Dashboard v2 готов и запушен** (коммит 4bbc51b).
+**Dashboard v3 готов и работает** — T-Invest REST API, данные реальные.
+FIGI: TATN = `BBG004RVFFC0`, TATNP = `BBG004S68829` (проверено).
+Запуск: `start_dashboard.bat` (ярлык на рабочем столе).
 
-**БЛИЖАЙШАЯ ЗАДАЧА: переключить dashboard на T-Invest API**
-- Токен T-Invest сбрасывается, после сброса продолжить в новом чате
-- Создать `.env` с `TINKOFF_TOKEN=...`
-- Заменить `get_current_price()` и `get_candles()` на T-Invest SDK
-- FIGI: TATN = `BBG004RVFFC0`, TATNP = `BBG004S68829` (проверено через T-Invest API)
-- Проверить на вечерней сессии MOEX (19:05–23:50 МСК)
+**БЛИЖАЙШАЯ ЗАДАЧА: Dashboard v2.0 — Alert Panel (полуавтомат)**
+- Мигающий блок при сигнале с параметрами входа
+- Кнопки РАЗРЕШИТЬ / ПРОПУСТИТЬ + таймаут 30 сек
+- Расчёт лотности и R/R прямо в интерфейсе
+- Ордера пока НЕ выставляются — только UI
+- Архитектура: `docs/bot_spec/05_SEMI_AUTO_ARCHITECTURE.md`
+- HTML-схема: `docs/SEMI_AUTO_ARCHITECTURE.html`
 
 **Остальные приоритеты:**
 1. **Обновить `02_RISK_MANAGEMENT.md`** данными из Р9-09 (числа РМ от Виктора)
