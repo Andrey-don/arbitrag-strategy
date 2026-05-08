@@ -114,7 +114,7 @@ updated: 2026-05-08 (Dashboard v2: двойная ось, пагинация ISS
 - Токен T-Invest сбрасывается, после сброса продолжить в новом чате
 - Создать `.env` с `TINKOFF_TOKEN=...`
 - Заменить `get_current_price()` и `get_candles()` на T-Invest SDK
-- FIGI: TATN = `BBG004RVFFC0`, TATNP = `BBG004S68614`
+- FIGI: TATN = `BBG004RVFFC0`, TATNP = `BBG004S68829` (проверено через T-Invest API)
 - Проверить на вечерней сессии MOEX (19:05–23:50 МСК)
 
 **Остальные приоритеты:**

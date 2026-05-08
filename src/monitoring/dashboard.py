@@ -1,21 +1,30 @@
 """
 MATS Dashboard — мониторинг спреда ТАТок (TATN / TATNP)
-Данные: MOEX ISS API (бесплатно, без токена)
+Данные: T-Invest REST API (токен из .env)
 Запуск: streamlit run src/monitoring/dashboard.py
 """
 
-from datetime import datetime, timedelta
+import os
+from datetime import datetime, timedelta, timezone
 
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import requests
 import streamlit as st
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # ---------------------------------------------------------------------------
 # Конфигурация
 # ---------------------------------------------------------------------------
-BOARD = "TQBR"
+TINKOFF_TOKEN = os.getenv("TINKOFF_TOKEN", "")
+FIGI = {
+    "TATN":  "BBG004RVFFC0",
+    "TATNP": "BBG004S68829",
+}
+_TINVEST_BASE = "https://invest-public-api.tinkoff.ru/rest"
 
 SPREAD_LEVELS = [
     (0.0,  "red",    "solid", "0 — пол"),
@@ -36,77 +45,76 @@ RATIO_LEVELS = [
 
 
 # ---------------------------------------------------------------------------
-# MOEX ISS API
+# T-Invest REST API
 # ---------------------------------------------------------------------------
+_TF_MAP = {
+    1:  "CANDLE_INTERVAL_1_MIN",
+    5:  "CANDLE_INTERVAL_5_MIN",
+    10: "CANDLE_INTERVAL_10_MIN",
+    15: "CANDLE_INTERVAL_15_MIN",
+    60: "CANDLE_INTERVAL_HOUR",
+}
+
+
+def _headers() -> dict:
+    return {"Authorization": f"Bearer {TINKOFF_TOKEN}", "Content-Type": "application/json"}
+
+
+def _q2f(q: dict) -> float:
+    return float(q.get("units", 0)) + q.get("nano", 0) / 1_000_000_000
+
+
 def get_current_price(ticker: str) -> float | None:
-    url = (
-        f"https://iss.moex.com/iss/engines/stock/markets/shares"
-        f"/boards/{BOARD}/securities/{ticker}.json"
-    )
-    params = {
-        "iss.meta": "off",
-        "iss.only": "marketdata",
-        "marketdata.columns": "SECID,LAST,LCLOSEPRICE",
-    }
+    figi = FIGI.get(ticker)
+    if not figi or not TINKOFF_TOKEN:
+        return None
     try:
-        r = requests.get(url, params=params, timeout=5)
-        rows = r.json()["marketdata"]["data"]
-        if rows:
-            last = rows[0][1]
-            close = rows[0][2]
-            return float(last) if last else (float(close) if close else None)
+        r = requests.post(
+            f"{_TINVEST_BASE}/tinkoff.public.invest.api.contract.v1.MarketDataService/GetLastPrices",
+            json={"figi": [figi]},
+            headers=_headers(),
+            timeout=5,
+        )
+        price = r.json()["lastPrices"][0]["price"]
+        value = _q2f(price)
+        return value if value > 0 else None
     except Exception:
         return None
 
 
-_MOEX_VALID_INTERVALS = {1, 10, 60}
-
-
 def get_candles(ticker: str, days: int = 1, interval: int = 1) -> pd.DataFrame:
-    date_from = (datetime.now() - timedelta(days=days - 1)).strftime("%Y-%m-%d")
-    # MOEX ISS поддерживает только 1, 10, 60 мин — остальные ресемплируем из 1 мин
-    base = interval if interval in _MOEX_VALID_INTERVALS else 1
-    url = (
-        f"https://iss.moex.com/iss/engines/stock/markets/shares"
-        f"/boards/{BOARD}/securities/{ticker}/candles.json"
-    )
-    # ISS отдаёт по 500 свечей за запрос — нужна пагинация
-    all_rows: list = []
-    columns: list | None = None
-    start = 0
-    for _ in range(20):  # не более 20 страниц (≈10 000 свечей)
-        try:
-            params = {"interval": base, "from": date_from,
-                      "start": start, "iss.meta": "off"}
-            r = requests.get(url, params=params, timeout=10)
-            data = r.json()["candles"]
-            batch = data["data"]
-            if not batch:
-                break
-            if columns is None:
-                columns = data["columns"]
-            all_rows.extend(batch)
-            if len(batch) < 500:   # последняя страница
-                break
-            start += len(batch)
-        except Exception:
-            break
-
-    if not all_rows or columns is None:
+    figi = FIGI.get(ticker)
+    if not figi or not TINKOFF_TOKEN:
         return pd.DataFrame()
-
-    df = pd.DataFrame(all_rows, columns=columns)
-    df["begin"] = pd.to_datetime(df["begin"])
-    df = df[["begin", "close"]].copy()
-    if interval != base and not df.empty:
-        df = (
-            df.set_index("begin")
-            .resample(f"{interval}min")["close"]
-            .last()
-            .dropna()
-            .reset_index()
+    ti_interval = _TF_MAP.get(interval, "CANDLE_INTERVAL_1_MIN")
+    to_dt   = datetime.now(timezone.utc)
+    from_dt = to_dt - timedelta(days=days)
+    try:
+        r = requests.post(
+            f"{_TINVEST_BASE}/tinkoff.public.invest.api.contract.v1.MarketDataService/GetCandles",
+            json={
+                "figi":     figi,
+                "from":     from_dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "to":       to_dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "interval": ti_interval,
+            },
+            headers=_headers(),
+            timeout=10,
         )
-    return df
+        candles = r.json().get("candles", [])
+        if not candles:
+            return pd.DataFrame()
+        rows = []
+        for c in candles:
+            close = _q2f(c["close"])
+            if close == 0:
+                continue
+            # Конвертируем UTC → МСК (+3ч), убираем tzinfo для Plotly
+            ts = pd.to_datetime(c["time"]) + timedelta(hours=3)
+            rows.append({"begin": ts.replace(tzinfo=None), "close": close})
+        return pd.DataFrame(rows)
+    except Exception:
+        return pd.DataFrame()
 
 
 # ---------------------------------------------------------------------------
@@ -151,7 +159,7 @@ with st.sidebar:
     )
     refresh_sec = st.slider("Обновление (сек)", 2, 60, 5, 1)
     st.divider()
-    st.caption("Данные: MOEX ISS API")
+    st.caption("Данные: T-Invest API")
     st.caption("Уровни: bot_spec/01_STRATEGY_RULES.md")
 
 
@@ -167,10 +175,13 @@ def live_dashboard(days: int, tf: int) -> None:
     price_tatn  = get_current_price("TATN")
     price_tatnp = get_current_price("TATNP")
 
+    if not TINKOFF_TOKEN:
+        st.error("⛔ TINKOFF_TOKEN не найден. Создайте файл .env с токеном.")
+        return
     if not price_tatn or not price_tatnp:
-        st.error(
-            f"⛔ [{now}] Нет данных от MOEX. "
-            "Биржа закрыта (10:00–18:50 и 19:05–23:50 МСК) или нет интернета."
+        st.warning(
+            f"⏸ [{now}] Нет котировок от T-Invest. "
+            "Биржа закрыта (10:00–18:50 и 19:05–23:50 МСК) или нет соединения."
         )
         return
 
