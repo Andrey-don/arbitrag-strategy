@@ -647,10 +647,11 @@
       <div class="card-icon">⚡</div>
       <h3>Order Executor</h3>
       <ul>
-        <li><code>asyncio.gather(buy_leg, sell_leg)</code></li>
+        <li><code>asyncio.gather(buy_leg, sell_leg)</code> — запросы уходят в 1 момент</li>
         <li>Обе ноги одновременно — железное правило</li>
-        <li>T-Invest API: <code>PostOrder</code></li>
-        <li>Тип: лимитный или рыночный</li>
+        <li>T-Invest API: <code>PostOrder</code> · тип: <b>лимитный</b> (не рыночный!)</li>
+        <li>TATNP buy: цена = <code>ask[0]</code> · TATN sell: цена = <code>bid[0]</code></li>
+        <li>Нет заполнения за 15 сек → отменить обе ноги</li>
         <li><code>DRY_RUN=true</code> — только лог, без отправки</li>
       </ul>
     </div>
@@ -943,11 +944,18 @@
       <div class="fc-terminal" style="background:var(--green-dim);border:2px solid var(--green)">
         <div style="color:var(--green);font-weight:700;font-size:15px;margin-bottom:10px">✅ НАЖАТЬ РАЗРЕШИТЬ</div>
         <div style="font-size:12px;color:var(--text);line-height:1.9;text-align:left">
-          ▸ <b>Купить</b> TATNP по рынку (лонг)<br>
-          ▸ <b>Продать</b> TATN по рынку (шорт)<br>
-          ▸ Обе ноги <b>одновременно</b><br>
-          ▸ Зафиксировать: <code>спред_входа = X ₽</code><br>
-          ▸ <b style="color:#f85149">Стоп = X + 3.0 ₽</b> (не забыть!)
+          ▸ <code>asyncio.gather(buy_TATNP, sell_TATN)</code> — отправить обе одновременно<br>
+          ▸ <b>TATNP</b>: лимитка на покупку = <code>ask[0]</code> (лучший аск стакана)<br>
+          ▸ <b>TATN</b>: лимитка на продажу = <code>bid[0]</code> (лучший бид стакана)<br>
+          ▸ Запросы уходят в 1 момент — заполнение за 1–15 сек (зависит от ликвидности)<br>
+          ▸ Если нога не заполнилась за 15 сек → <b style="color:#f78166">отменить обе</b>, ждать следующий сигнал<br>
+          ▸ Зафиксировать: <code>спред_входа = цена_TATN − цена_TATNP</code><br>
+          ▸ <b style="color:#f85149">Стоп = спред_входа + 3.0 ₽</b> (не забыть!)
+        </div>
+        <div style="margin-top:10px;padding:8px 10px;background:var(--bg3);border-radius:6px;font-size:11px;color:var(--muted);line-height:1.6">
+          <b style="color:var(--yellow)">⚠️ Почему лимитка, не рыночный ордер?</b><br>
+          Рыночный ордер на тонком стакане (TATNP) съедает несколько уровней → слипадж 0.5–1.5 ₽ → съедает весь скальп.
+          Агрессивная лимитка по <code>ask[0]</code> / <code>bid[0]</code> = мгновенный вход без лишнего слиппажа.
         </div>
       </div>
 
