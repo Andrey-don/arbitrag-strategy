@@ -58,3 +58,7 @@ models/
 tmp/
 temp/
 *.tmp
+
+# Релизные ZIP-архивы (генерируются по запросу)
+releases/*.zip
+*.zip
