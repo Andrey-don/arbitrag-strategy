@@ -70,26 +70,43 @@ def get_candles(ticker: str, days: int = 1, interval: int = 1) -> pd.DataFrame:
         f"https://iss.moex.com/iss/engines/stock/markets/shares"
         f"/boards/{BOARD}/securities/{ticker}/candles.json"
     )
-    params = {"interval": base, "from": date_from, "iss.meta": "off"}
-    try:
-        r = requests.get(url, params=params, timeout=10)
-        data = r.json()["candles"]
-        if not data["data"]:
-            return pd.DataFrame()
-        df = pd.DataFrame(data["data"], columns=data["columns"])
-        df["begin"] = pd.to_datetime(df["begin"])
-        df = df[["begin", "close"]].copy()
-        if interval != base and not df.empty:
-            df = (
-                df.set_index("begin")
-                .resample(f"{interval}min")["close"]
-                .last()
-                .dropna()
-                .reset_index()
-            )
-        return df
-    except Exception:
+    # ISS отдаёт по 500 свечей за запрос — нужна пагинация
+    all_rows: list = []
+    columns: list | None = None
+    start = 0
+    for _ in range(20):  # не более 20 страниц (≈10 000 свечей)
+        try:
+            params = {"interval": base, "from": date_from,
+                      "start": start, "iss.meta": "off"}
+            r = requests.get(url, params=params, timeout=10)
+            data = r.json()["candles"]
+            batch = data["data"]
+            if not batch:
+                break
+            if columns is None:
+                columns = data["columns"]
+            all_rows.extend(batch)
+            if len(batch) < 500:   # последняя страница
+                break
+            start += len(batch)
+        except Exception:
+            break
+
+    if not all_rows or columns is None:
         return pd.DataFrame()
+
+    df = pd.DataFrame(all_rows, columns=columns)
+    df["begin"] = pd.to_datetime(df["begin"])
+    df = df[["begin", "close"]].copy()
+    if interval != base and not df.empty:
+        df = (
+            df.set_index("begin")
+            .resample(f"{interval}min")["close"]
+            .last()
+            .dropna()
+            .reset_index()
+        )
+    return df
 
 
 # ---------------------------------------------------------------------------
@@ -313,15 +330,44 @@ def live_dashboard(days: int, tf: int) -> None:
         row=3, col=1,
     )
 
-    # Общий layout
-    # Временная шкала на всех трёх графиках
+    # Вертикальная линия = текущее время (ISS запаздывает, но линия точная)
+    now_t = datetime.now().replace(second=0, microsecond=0)
+    fig.add_vline(
+        x=now_t,
+        line_width=1,
+        line_color="rgba(180,180,180,0.55)",
+        line_dash="solid",
+    )
+
+    # Отступ справа 5% от диапазона данных
+    x_start = df["begin"].min()
+    x_pad   = (now_t - x_start) * 0.05
+
+    # Временная шкала + диапазон на всех трёх графиках
     for row in (1, 2, 3):
         fig.update_xaxes(
             showticklabels=True,
             tickformat="%H:%M",
             tickfont=dict(size=9),
+            range=[x_start, now_t + x_pad],
             row=row, col=1,
         )
+
+    # Кнопки зума — только на верхнем графике, управляют всеми тремя (shared_xaxes)
+    fig.update_xaxes(
+        rangeselector=dict(
+            bgcolor="rgba(30,30,30,0.85)",
+            activecolor="rgba(80,80,80,0.9)",
+            font=dict(size=10, color="white"),
+            buttons=[
+                dict(count=1,  label="1ч",  step="hour", stepmode="backward"),
+                dict(count=2,  label="2ч",  step="hour", stepmode="backward"),
+                dict(count=4,  label="4ч",  step="hour", stepmode="backward"),
+                dict(step="all", label="День"),
+            ],
+        ),
+        row=1, col=1,
+    )
 
     fig.update_layout(
         height=900,
