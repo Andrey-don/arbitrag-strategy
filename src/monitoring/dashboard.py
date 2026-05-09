@@ -11,6 +11,11 @@ from datetime import datetime, timedelta, timezone
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import concurrent.futures
+import csv
+import socket
+import uuid
+
 import requests
 import streamlit as st
 from dotenv import load_dotenv
@@ -76,6 +81,12 @@ def _q2f(q: dict) -> float:
     return float(q.get("units", 0)) + q.get("nano", 0) / 1_000_000_000
 
 
+def _f2q(price: float) -> dict:
+    units = int(price)
+    nano  = round((price - units) * 1_000_000_000)
+    return {"units": units, "nano": nano}
+
+
 def get_current_price(ticker: str) -> float | None:
     figi = FIGI.get(ticker)
     if not figi or not TINKOFF_TOKEN:
@@ -130,6 +141,127 @@ def get_candles(ticker: str, days: int = 1, interval: int = 1) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------------------
+# T-Invest API — ордера и стакан
+# ---------------------------------------------------------------------------
+
+def get_orderbook(ticker: str, depth: int = 5) -> dict | None:
+    figi = FIGI.get(ticker)
+    if not figi or not TINKOFF_TOKEN:
+        return None
+    try:
+        r = requests.post(
+            f"{_TINVEST_BASE}/tinkoff.public.invest.api.contract.v1.MarketDataService/GetOrderBook",
+            json={"figi": figi, "depth": depth},
+            headers=_headers(),
+            timeout=5,
+        )
+        data = r.json()
+        asks = [(_q2f(i["price"]), int(i["quantity"])) for i in data.get("asks", [])]
+        bids = [(_q2f(i["price"]), int(i["quantity"])) for i in data.get("bids", [])]
+        if not asks or not bids:
+            return None
+        return {"asks": asks, "bids": bids}
+    except Exception:
+        return None
+
+
+def get_account_id() -> str | None:
+    if not TINKOFF_TOKEN:
+        return None
+    try:
+        r = requests.post(
+            f"{_TINVEST_BASE}/tinkoff.public.invest.api.contract.v1.UsersService/GetAccounts",
+            json={},
+            headers=_headers(),
+            timeout=5,
+        )
+        accounts = r.json().get("accounts", [])
+        return accounts[0]["id"] if accounts else None
+    except Exception:
+        return None
+
+
+def _post_order(figi: str, direction: str, qty: int, price: float, account_id: str) -> str | None:
+    """direction: 'BUY' или 'SELL'. Возвращает orderId или None."""
+    try:
+        r = requests.post(
+            f"{_TINVEST_BASE}/tinkoff.public.invest.api.contract.v1.OrdersService/PostOrder",
+            json={
+                "figi":      figi,
+                "quantity":  qty,
+                "price":     _f2q(price),
+                "direction": f"ORDER_DIRECTION_{direction}",
+                "accountId": account_id,
+                "orderType": "ORDER_TYPE_LIMIT",
+                "orderId":   str(uuid.uuid4()),
+            },
+            headers=_headers(),
+            timeout=10,
+        )
+        return r.json().get("orderId")
+    except Exception:
+        return None
+
+
+def _get_order_state(account_id: str, order_id: str) -> dict | None:
+    try:
+        r = requests.post(
+            f"{_TINVEST_BASE}/tinkoff.public.invest.api.contract.v1.OrdersService/GetOrderState",
+            json={"accountId": account_id, "orderId": order_id},
+            headers=_headers(),
+            timeout=5,
+        )
+        return r.json()
+    except Exception:
+        return None
+
+
+def _cancel_order(account_id: str, order_id: str) -> None:
+    try:
+        requests.post(
+            f"{_TINVEST_BASE}/tinkoff.public.invest.api.contract.v1.OrdersService/CancelOrder",
+            json={"accountId": account_id, "orderId": order_id},
+            headers=_headers(),
+            timeout=5,
+        )
+    except Exception:
+        pass
+
+
+def _post_stop_order(figi: str, direction: str, qty: int, stop_price: float, account_id: str) -> None:
+    """Выставить стоп-лосс на сервер T-Invest (работает без интернета на стороне брокера)."""
+    try:
+        requests.post(
+            f"{_TINVEST_BASE}/tinkoff.public.invest.api.contract.v1.StopOrdersService/PostStopOrder",
+            json={
+                "figi":           figi,
+                "quantity":       qty,
+                "stopPrice":      _f2q(stop_price),
+                "direction":      f"STOP_ORDER_DIRECTION_{direction}",
+                "accountId":      account_id,
+                "stopOrderType":  "STOP_ORDER_TYPE_STOP_LOSS",
+                "expirationType": "STOP_ORDER_EXPIRATION_TYPE_GOOD_TILL_CANCEL",
+            },
+            headers=_headers(),
+            timeout=10,
+        )
+    except Exception:
+        pass
+
+
+def _log_trade(data: dict) -> None:
+    log_dir  = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", "logs"))
+    log_path = os.path.join(log_dir, "trades.csv")
+    os.makedirs(log_dir, exist_ok=True)
+    file_exists = os.path.exists(log_path)
+    with open(log_path, "a", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=list(data.keys()))
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow(data)
+
+
+# ---------------------------------------------------------------------------
 # Расчёт параметров входа
 # ---------------------------------------------------------------------------
 def calc_entry_params(spread_rub: float, price_tatn: float, price_tatnp: float) -> dict:
@@ -150,6 +282,163 @@ def calc_entry_params(spread_rub: float, price_tatn: float, price_tatnp: float) 
         "commission":   commission,
         "rr":           rr,
     }
+
+
+LEG_TIMEOUT_S = 15  # сек ожидания заполнения каждой ноги
+
+
+def execute_entry(alert_data: dict, account_id: str) -> dict:
+    """
+    Обе ноги одновременно через ThreadPoolExecutor (аналог asyncio.gather).
+    Агрессивные лимитки: TATNP buy=ask[0], TATN sell=bid[0].
+    Таймаут 15 сек — если нога не заполнилась, отменить обе + аварийно закрыть заполненную.
+    После входа — стоп-ордера на сервер T-Invest (защита без интернета).
+    """
+    ob_tatnp = get_orderbook("TATNP")
+    ob_tatn  = get_orderbook("TATN")
+    if not ob_tatnp or not ob_tatn:
+        return {"status": "FAILED", "reason": "Нет стакана"}
+
+    buy_price  = ob_tatnp["asks"][0][0]   # TATNP: покупаем по ask[0]
+    sell_price = ob_tatn["bids"][0][0]    # TATN:  продаём по bid[0]
+    lots       = alert_data["lots"]
+
+    # Обе ноги одновременно (правило р9-09)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
+        f_buy  = ex.submit(_post_order, FIGI["TATNP"], "BUY",  lots, buy_price,  account_id)
+        f_sell = ex.submit(_post_order, FIGI["TATN"],  "SELL", lots, sell_price, account_id)
+    oid_buy  = f_buy.result()
+    oid_sell = f_sell.result()
+
+    if not oid_buy or not oid_sell:
+        if oid_buy:  _cancel_order(account_id, oid_buy)
+        if oid_sell: _cancel_order(account_id, oid_sell)
+        return {"status": "FAILED", "reason": "Ошибка PostOrder"}
+
+    # Ждём заполнения обеих ног (таймаут 15 сек)
+    filled_buy = filled_sell = False
+    price_buy  = buy_price
+    price_sell = sell_price
+    deadline   = time.time() + LEG_TIMEOUT_S
+
+    while time.time() < deadline:
+        if not filled_buy:
+            s = _get_order_state(account_id, oid_buy)
+            if s and s.get("executionReportStatus") == "EXECUTION_REPORT_STATUS_FILL":
+                filled_buy = True
+                price_buy  = _q2f(s.get("averagePositionPrice", _f2q(buy_price)))
+        if not filled_sell:
+            s = _get_order_state(account_id, oid_sell)
+            if s and s.get("executionReportStatus") == "EXECUTION_REPORT_STATUS_FILL":
+                filled_sell = True
+                price_sell  = _q2f(s.get("averagePositionPrice", _f2q(sell_price)))
+        if filled_buy and filled_sell:
+            break
+        time.sleep(1)
+
+    # Таймаут — нога-риск: отменить незаполненные, аварийно закрыть заполненные
+    if not (filled_buy and filled_sell):
+        if not filled_buy:  _cancel_order(account_id, oid_buy)
+        if not filled_sell: _cancel_order(account_id, oid_sell)
+        ob2_tatnp = get_orderbook("TATNP")
+        ob2_tatn  = get_orderbook("TATN")
+        if filled_buy  and ob2_tatnp:
+            _post_order(FIGI["TATNP"], "SELL", lots, ob2_tatnp["bids"][0][0], account_id)
+        if filled_sell and ob2_tatn:
+            _post_order(FIGI["TATN"],  "BUY",  lots, ob2_tatn["asks"][0][0],  account_id)
+        return {"status": "FAILED", "reason": "Таймаут 15 сек — нога не заполнилась"}
+
+    # Обе ноги заполнены — выставить стоп-ордера на сервер T-Invest
+    entry_spread = price_sell - price_buy
+    stop_half    = STOP_SPREAD_ADD / 2   # каждая нога защищается на половину стопа
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
+        ex.submit(_post_stop_order, FIGI["TATNP"], "SELL", lots, price_buy  - stop_half, account_id)
+        ex.submit(_post_stop_order, FIGI["TATN"],  "BUY",  lots, price_sell + stop_half, account_id)
+
+    _log_trade({
+        "time":         datetime.now().isoformat(),
+        "type":         "ENTRY",
+        "ticker_buy":   "TATNP",
+        "ticker_sell":  "TATN",
+        "buy_price":    round(price_buy,   2),
+        "sell_price":   round(price_sell,  2),
+        "entry_spread": round(entry_spread, 2),
+        "stop_spread":  round(entry_spread + STOP_SPREAD_ADD, 2),
+        "lots":         lots,
+        "oid_buy":      oid_buy,
+        "oid_sell":     oid_sell,
+    })
+
+    return {
+        "status":       "OK",
+        "buy_price":    price_buy,
+        "sell_price":   price_sell,
+        "entry_spread": entry_spread,
+        "oid_buy":      oid_buy,
+        "oid_sell":     oid_sell,
+    }
+
+
+def close_position_real(pos: dict, account_id: str) -> dict:
+    """Закрыть реальную позицию: SELL TATNP + BUY TATN одновременно."""
+    ob_tatnp = get_orderbook("TATNP")
+    ob_tatn  = get_orderbook("TATN")
+    if not ob_tatnp or not ob_tatn:
+        return {"status": "FAILED", "reason": "Нет стакана при закрытии"}
+
+    lots       = pos["lots"]
+    sell_tatnp = ob_tatnp["bids"][0][0]   # TATNP: продаём по bid[0]
+    buy_tatn   = ob_tatn["asks"][0][0]    # TATN:  покупаем по ask[0]
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
+        f_sell = ex.submit(_post_order, FIGI["TATNP"], "SELL", lots, sell_tatnp, account_id)
+        f_buy  = ex.submit(_post_order, FIGI["TATN"],  "BUY",  lots, buy_tatn,   account_id)
+    oid_sell = f_sell.result()
+    oid_buy  = f_buy.result()
+
+    if not oid_sell or not oid_buy:
+        if oid_sell: _cancel_order(account_id, oid_sell)
+        if oid_buy:  _cancel_order(account_id, oid_buy)
+        return {"status": "FAILED", "reason": "Ошибка PostOrder при закрытии"}
+
+    filled_sell = filled_buy_close = False
+    deadline = time.time() + LEG_TIMEOUT_S
+
+    while time.time() < deadline:
+        if not filled_sell:
+            s = _get_order_state(account_id, oid_sell)
+            if s and s.get("executionReportStatus") == "EXECUTION_REPORT_STATUS_FILL":
+                filled_sell = True
+                sell_tatnp  = _q2f(s.get("averagePositionPrice", _f2q(sell_tatnp)))
+        if not filled_buy_close:
+            s = _get_order_state(account_id, oid_buy)
+            if s and s.get("executionReportStatus") == "EXECUTION_REPORT_STATUS_FILL":
+                filled_buy_close = True
+                buy_tatn         = _q2f(s.get("averagePositionPrice", _f2q(buy_tatn)))
+        if filled_sell and filled_buy_close:
+            break
+        time.sleep(1)
+
+    if not (filled_sell and filled_buy_close):
+        if not filled_sell:      _cancel_order(account_id, oid_sell)
+        if not filled_buy_close: _cancel_order(account_id, oid_buy)
+        return {"status": "PARTIAL", "reason": "Таймаут при закрытии — проверьте позиции вручную"}
+
+    close_spread = buy_tatn - sell_tatnp
+    pnl = (pos["entry_spread"] - close_spread) * lots
+
+    _log_trade({
+        "time":         datetime.now().isoformat(),
+        "type":         "EXIT",
+        "close_tatnp":  round(sell_tatnp,  2),
+        "close_tatn":   round(buy_tatn,    2),
+        "entry_spread": round(pos["entry_spread"], 2),
+        "close_spread": round(close_spread, 2),
+        "pnl_gross":    round(pnl,          2),
+        "lots":         lots,
+    })
+
+    return {"status": "OK", "close_spread": close_spread, "pnl": pnl}
 
 
 def _render_alert(signal_code: str) -> None:
@@ -270,6 +559,104 @@ def _render_position(price_tatn: float, price_tatnp: float) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Рендер реальной позиции
+# ---------------------------------------------------------------------------
+def _render_real_position(price_tatn: float, price_tatnp: float, account_id: str) -> None:
+    pos            = st.session_state.real_position
+    current_spread = price_tatn - price_tatnp
+    entry_spread   = pos["entry_spread"]
+    lots           = pos["lots"]
+    commission_est = lots * 4 * 0.05
+
+    pnl_gross = (entry_spread - current_spread) * lots
+    pnl_net   = pnl_gross - commission_est
+    elapsed   = datetime.now() - pos["entry_time"]
+    minutes   = int(elapsed.total_seconds() // 60)
+    seconds   = int(elapsed.total_seconds() % 60)
+
+    stop_loss = -STOP_SPREAD_ADD * lots
+    pnl_color = "#3fb950" if pnl_net >= 0 else "#f85149"
+    pnl_sign  = "+" if pnl_net >= 0 else ""
+
+    # --- Авто-стоп: срабатывает без кнопки ---
+    if pnl_net <= stop_loss:
+        st.error(f"🚨 АВТО-СТОП: P&L {pnl_sign}{pnl_net:.0f} ₽ достиг лимита {stop_loss:.0f} ₽")
+        with st.spinner("Аварийное закрытие позиции..."):
+            result = close_position_real(pos, account_id)
+        if result["status"] == "OK":
+            st.session_state.trade_history.append({
+                "Время входа":  pos["entry_time"].strftime("%H:%M:%S"),
+                "Спред входа":  f"{entry_spread:.2f}",
+                "Спред выхода": f"{result['close_spread']:.2f}",
+                "Лотов":        lots,
+                "P&L ₽":        f"{result['pnl']:+.0f}",
+                "Результат":    "🛑 Стоп-лосс",
+                "Режим":        "РЕАЛЬНЫЙ",
+            })
+            st.session_state.real_position        = None
+            st.session_state.alert_cooldown_until = time.time() + ALERT_COOLDOWN_S
+        else:
+            st.error(f"⚠️ Авто-стоп не сработал: {result['reason']} — ЗАКРОЙТЕ ВРУЧНУЮ в CScalp!")
+        return
+
+    # --- Тейк-профит: спред сошёлся ---
+    if current_spread <= TARGET_SPREAD:
+        st.success(f"🎯 ТЕЙК-ПРОФИТ — спред {current_spread:.2f} ₽ ≤ {TARGET_SPREAD} ₽. Закрывайте!")
+
+    # --- Основной блок ---
+    st.markdown(f"""
+<style>
+@keyframes real-pulse {{
+    0%,100% {{ border-color: {pnl_color}; box-shadow: 0 0 10px {pnl_color}55; }}
+    50%     {{ border-color: {pnl_color}; box-shadow: 0 0 28px {pnl_color}99; }}
+}}
+.real-pos-box {{
+    border: 3px solid {pnl_color}; border-radius: 10px;
+    padding: 12px 18px; background: #0d1117; margin-bottom: 10px;
+    animation: real-pulse 1.5s ease-in-out infinite;
+}}
+</style>
+<div class="real-pos-box">
+  <span style="color:#f85149;font-size:11px;font-weight:700;letter-spacing:1px">
+    ⚠️ РЕАЛЬНАЯ ПОЗИЦИЯ
+  </span><br>
+  <span style="color:{pnl_color};font-size:15px;font-weight:700">
+    📊 P&L (ориентир.): <span style="font-size:20px">{pnl_sign}{pnl_net:.0f} ₽</span>
+  </span>
+  &nbsp;&nbsp;<span style="color:#7d8590;font-size:12px">⏱ {minutes:02d}:{seconds:02d} в позиции</span>
+</div>
+""", unsafe_allow_html=True)
+
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("Спред входа",     f"{entry_spread:.2f} ₽")
+    c2.metric("Спред сейчас",    f"{current_spread:.2f} ₽",
+              delta=f"{current_spread - entry_spread:+.2f} ₽", delta_color="inverse")
+    c3.metric("Лотов",           f"{lots}")
+    c4.metric("P&L (ориентир.)", f"{pnl_sign}{pnl_net:.0f} ₽")
+    c5.metric("Стоп-лосс",       f"{stop_loss:.0f} ₽")
+
+    if st.button("⛔  ЗАКРЫТЬ РЕАЛЬНУЮ ПОЗИЦИЮ", type="primary",
+                 use_container_width=True, key="btn_close_real"):
+        with st.spinner("Закрываю позицию на бирже..."):
+            result = close_position_real(pos, account_id)
+        if result["status"] == "OK":
+            st.session_state.trade_history.append({
+                "Время входа":  pos["entry_time"].strftime("%H:%M:%S"),
+                "Спред входа":  f"{entry_spread:.2f}",
+                "Спред выхода": f"{result['close_spread']:.2f}",
+                "Лотов":        lots,
+                "P&L ₽":        f"{result['pnl']:+.0f}",
+                "Результат":    "✅ Прибыль" if result["pnl"] > 0 else "❌ Убыток",
+                "Режим":        "РЕАЛЬНЫЙ",
+            })
+            st.session_state.real_position        = None
+            st.session_state.alert_cooldown_until = time.time() + ALERT_COOLDOWN_S
+            st.success(f"✅ Позиция закрыта. P&L: {result['pnl']:+.0f} ₽")
+        else:
+            st.error(f"⚠️ {result['reason']} — проверьте позиции в CScalp!")
+
+
+# ---------------------------------------------------------------------------
 # Логика сигнала
 # ---------------------------------------------------------------------------
 def calc_signal(spread: float, ratio: float) -> tuple[str, str, str]:
@@ -340,6 +727,15 @@ with st.sidebar:
     st.caption("Данные: T-Invest API")
     st.caption("Уровни: bot_spec/01_STRATEGY_RULES.md")
     st.divider()
+    try:
+        _s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        _s.connect(("8.8.8.8", 80))
+        _local_ip = _s.getsockname()[0]
+        _s.close()
+    except Exception:
+        _local_ip = "localhost"
+    st.caption(f"📱 Мобильный: http://{_local_ip}:8501")
+    st.divider()
     paper_mode = st.toggle("📋 Тренажёр", value=True,
                            help="Виртуальные сделки на реальных котировках")
 
@@ -354,7 +750,9 @@ for _k, _v in [
     ("alert_action",         None),
     ("alert_cooldown_until", 0.0),
     ("paper_position",       None),
+    ("real_position",        None),
     ("trade_history",        []),
+    ("account_id",           None),
 ]:
     if _k not in st.session_state:
         st.session_state[_k] = _v
@@ -367,6 +765,11 @@ for _k, _v in [
 def live_dashboard(days: int, tf: int, paper: bool = True) -> None:
     now = datetime.now().strftime("%H:%M:%S")
     tf_label = f"{tf} мин · {days} дн."
+
+    # Кэшируем account_id один раз на сессию (только для реальной торговли)
+    if st.session_state.account_id is None and not DRY_RUN:
+        st.session_state.account_id = get_account_id()
+    account_id = st.session_state.account_id
 
     # --- Текущие цены ---
     price_tatn  = get_current_price("TATN")
@@ -419,20 +822,44 @@ def live_dashboard(days: int, tf: int, paper: bool = True) -> None:
     # --- Открыть позицию при подтверждении ---
     if (st.session_state.alert_action == "APPROVED"
             and st.session_state.paper_position is None
+            and st.session_state.real_position is None
             and st.session_state.alert_data is not None):
         p = st.session_state.alert_data
-        st.session_state.paper_position = {
-            "entry_time":   datetime.now(),
-            "entry_spread": spread_rub,
-            "entry_tatn":   price_tatn,
-            "entry_tatnp":  price_tatnp,
-            "lots":         p["lots"],
-            "commission":   p["commission"],
-        }
+        if paper or DRY_RUN:
+            # Тренажёр или DRY_RUN=true — виртуальная позиция
+            st.session_state.paper_position = {
+                "entry_time":   datetime.now(),
+                "entry_spread": spread_rub,
+                "entry_tatn":   price_tatn,
+                "entry_tatnp":  price_tatnp,
+                "lots":         p["lots"],
+                "commission":   p["commission"],
+            }
+        else:
+            # Реальные ордера через T-Invest API
+            if not account_id:
+                st.error("❌ Не удалось получить account_id — проверьте TINKOFF_TOKEN")
+            else:
+                with st.spinner("⚙️ Выставляю ордера на биржу..."):
+                    result = execute_entry(p, account_id)
+                if result["status"] == "OK":
+                    st.session_state.real_position = {
+                        "entry_time":   datetime.now(),
+                        "entry_spread": result["entry_spread"],
+                        "entry_tatn":   result["sell_price"],
+                        "entry_tatnp":  result["buy_price"],
+                        "lots":         p["lots"],
+                        "oid_buy":      result["oid_buy"],
+                        "oid_sell":     result["oid_sell"],
+                    }
+                else:
+                    st.error(f"❌ Вход не удался: {result['reason']}")
         st.session_state.alert_action = None
 
     # --- Блок позиции (если открыта) ---
-    if st.session_state.paper_position is not None:
+    if st.session_state.real_position is not None:
+        _render_real_position(price_tatn, price_tatnp, account_id)
+    elif st.session_state.paper_position is not None:
         _render_position(price_tatn, price_tatnp)
     elif st.session_state.alert_active:
         _render_alert(code)

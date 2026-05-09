@@ -2,5 +2,5 @@
 title MATS Dashboard
 cd /d "%~dp0"
 call venv\Scripts\activate
-streamlit run src/monitoring/dashboard.py
+streamlit run src/monitoring/dashboard.py --server.address 0.0.0.0 --server.port 8501
 pause
