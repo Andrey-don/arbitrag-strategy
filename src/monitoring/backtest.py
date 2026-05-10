@@ -204,6 +204,88 @@ def calc_stats(trades: list, deposit: float) -> dict:
         "roi":       sum(pnls) / deposit * 100,
     }
 
+
+# ---------------------------------------------------------------------------
+# Сигналы и параметры входа (общие для дашборда и тренажёра)
+# ---------------------------------------------------------------------------
+def calc_signal(spread: float, ratio: float) -> tuple[str, str, str]:
+    if spread >= 20.0: return "TAKE_PROFIT", "Спред > 20 ₽ — зона выхода",       "error"
+    if ratio  <  1.000: return "STRONG_LONG", "TATNP дороже обычки — сильный лонг", "error"
+    if spread >= 7.0 and ratio >= 1.011: return "LONG_GOOD",  "Хороший вход",  "success"
+    if spread >= 5.0 and ratio >= 1.008: return "LONG_SCALP", "Вход скальп",   "warning"
+    if spread >= 2.5: return "ALERT",     "Наблюдать, готовить",               "info"
+    if spread <= 0.5: return "EXIT",      "Линии сошлись. Закрывать!",         "error"
+    return "NO_SIGNAL", "Нет сигнала", "info"
+
+
+def calc_entry_params(spread: float, deposit: float, stop_add: float, target: float) -> dict:
+    risk_per_trade = deposit * 0.20 / 5
+    lots           = max(1, int(risk_per_trade / stop_add))
+    commission     = lots * 4 * 0.05
+    profit_net     = (spread - target) * lots - commission
+    risk           = stop_add * lots
+    rr             = profit_net / risk if risk > 0 else 0.0
+    return {"lots": lots, "commission": commission, "profit_net": profit_net, "risk": risk, "rr": rr}
+
+
+def run_sim_to_end(df: pd.DataFrame, deposit: float, stop_add: float, target: float) -> None:
+    """Прокрутить все оставшиеся свечи в режиме полного автомата."""
+    ss     = st.session_state
+    cursor = ss["sim_cursor"]
+    n      = len(df)
+
+    while cursor < n:
+        row    = df.iloc[cursor]
+        spread = row["spread"]
+        ratio  = row["ratio_h"]
+        ts     = row["begin"]
+
+        pos = ss["sim_position"]
+        if pos is not None:
+            stop_spread = pos["entry_spread"] + stop_add
+            rt = ex = None
+            if spread <= target:
+                rt, ex = "TP", target
+            elif spread >= stop_spread:
+                rt, ex = "SL", stop_spread
+            if rt:
+                commission = pos["lots"] * 4 * 0.05
+                pnl = (pos["entry_spread"] - ex) * pos["lots"] - commission
+                ss["sim_capital"] += pnl
+                ss["sim_trades"].append({
+                    "Вход":       pos["entry_time"].strftime("%d.%m %H:%M"),
+                    "entry_ts":   pos["entry_time"],
+                    "exit_ts":    ts,
+                    "Выход":      ts.strftime("%d.%m %H:%M"),
+                    "Сигнал":     pos["signal"],
+                    "Спред вх.":  round(pos["entry_spread"], 2),
+                    "Спред вых.": round(ex, 2),
+                    "Лотов":      pos["lots"],
+                    "P&L ₽":      round(pnl, 2),
+                    "Результат":  "✅ TP" if rt == "TP" else "🛑 SL",
+                    "Капитал":    round(ss["sim_capital"], 2),
+                    "hour":       ts.hour,
+                })
+                ss["sim_position"]     = None
+                ss["sim_cooldown_end"] = cursor + 5
+
+        if ss["sim_position"] is None and cursor >= ss["sim_cooldown_end"]:
+            sig, _, _ = calc_signal(spread, ratio)
+            if sig in {"LONG_SCALP", "LONG_GOOD"}:
+                ep = calc_entry_params(spread, deposit, stop_add, target)
+                if ep["rr"] >= 2.0:
+                    ss["sim_position"] = {
+                        "entry_time":   ts,
+                        "entry_spread": spread,
+                        "signal":       sig,
+                        "lots":         ep["lots"],
+                    }
+
+        cursor += 1
+
+    ss["sim_cursor"]         = n
+    ss["sim_last_processed"] = n
+
 # ---------------------------------------------------------------------------
 # Streamlit UI
 # ---------------------------------------------------------------------------
@@ -271,7 +353,7 @@ st.caption(
 # ---------------------------------------------------------------------------
 # Вкладки
 # ---------------------------------------------------------------------------
-tab_bt, tab_opt = st.tabs(["📊 Бэктест", "🔍 Оптимизатор"])
+tab_bt, tab_opt, tab_sim = st.tabs(["📊 Бэктест", "🔍 Оптимизатор", "🎮 Тренажёр"])
 
 # ===========================================================================
 # ВКЛАДКА 1: БЭКТЕСТ
@@ -380,6 +462,82 @@ with tab_bt:
                          "Лотов", "P&L ₽", "Результат", "Капитал"]
             df_tr = pd.DataFrame(trades)[cols_show].iloc[::-1].reset_index(drop=True)
             st.dataframe(df_tr, use_container_width=True, hide_index=True)
+
+            # --- Анализ по сессиям MOEX ---
+            st.divider()
+            st.markdown("### 📅 Анализ по сессиям MOEX")
+            st.caption("⚠️ Урок 11б: спред расходится чаще на **вечерней сессии** (19:05–23:50 МСК).")
+
+            df_tr_full = pd.DataFrame(trades).copy()
+            df_tr_full["hour"] = pd.to_datetime(df_tr_full["entry_ts"]).dt.hour
+
+            def _session(h: int) -> str:
+                if 10 <= h <= 18: return "Утренняя (10–18)"
+                if 19 <= h <= 23: return "Вечерняя (19–23)"
+                return "Другое"
+
+            df_tr_full["Сессия"] = df_tr_full["hour"].apply(_session)
+
+            sess_rows = []
+            for sess in ["Утренняя (10–18)", "Вечерняя (19–23)"]:
+                sub = df_tr_full[df_tr_full["Сессия"] == sess]
+                if sub.empty:
+                    continue
+                pnls = sub["P&L ₽"].tolist()
+                wins = [p for p in pnls if p > 0]
+                arr  = np.array(pnls)
+                sh   = (arr.mean() / arr.std() * len(pnls) ** 0.5) if len(pnls) > 1 and arr.std() > 0 else 0.0
+                sess_rows.append({
+                    "Сессия":  sess,
+                    "Сделок":  len(sub),
+                    "Winrate": f"{len(wins)/len(sub)*100:.0f}%",
+                    "P&L ₽":   f"{sum(pnls):+.0f}",
+                    "ROI %":   f"{sum(pnls)/float(deposit)*100:+.1f}%",
+                    "Sharpe":  f"{sh:.2f}",
+                })
+            if sess_rows:
+                st.dataframe(pd.DataFrame(sess_rows), hide_index=True, use_container_width=True)
+
+            # Bar: P&L по часам
+            hourly_pnl = df_tr_full.groupby("hour")["P&L ₽"].sum().reset_index()
+            fig_hr = go.Figure(go.Bar(
+                x=hourly_pnl["hour"],
+                y=hourly_pnl["P&L ₽"],
+                marker_color=["#4CAF50" if v >= 0 else "#f85149" for v in hourly_pnl["P&L ₽"]],
+                text=[f"{v:+.0f}" for v in hourly_pnl["P&L ₽"]],
+                textposition="outside",
+            ))
+            fig_hr.update_layout(
+                title="P&L по часам входа (МСК)", height=280,
+                xaxis=dict(title="Час", tickmode="linear", dtick=1),
+                yaxis=dict(title="P&L ₽", side="right"),
+                margin=dict(l=20, r=60, t=40, b=30),
+            )
+            st.plotly_chart(fig_hr, use_container_width=True)
+
+            # Scatter: каждая сделка
+            fig_sc = go.Figure()
+            for res, color, sym in [("TP", "#4CAF50", "circle"), ("SL", "#f85149", "x")]:
+                sub_sc = df_tr_full[df_tr_full["Результат"].str.contains(res)]
+                if not sub_sc.empty:
+                    fig_sc.add_trace(go.Scatter(
+                        x=sub_sc["hour"],
+                        y=sub_sc["P&L ₽"],
+                        mode="markers",
+                        name=res,
+                        marker=dict(color=color, size=11, symbol=sym),
+                        text=sub_sc["Вход"],
+                        hovertemplate="%{text}<br>P&L: %{y:.0f} ₽",
+                    ))
+            fig_sc.add_hline(y=0, line_dash="dash", line_color="rgba(255,255,255,0.25)")
+            fig_sc.update_layout(
+                title="Каждая сделка: час входа vs P&L", height=280,
+                xaxis=dict(title="Час входа (МСК)", tickmode="linear", dtick=1),
+                yaxis=dict(title="P&L ₽", side="right"),
+                margin=dict(l=20, r=60, t=40, b=30),
+                legend=dict(orientation="h", y=1.1),
+            )
+            st.plotly_chart(fig_sc, use_container_width=True)
 
 # ===========================================================================
 # ВКЛАДКА 2: ОПТИМИЗАТОР
@@ -521,3 +679,266 @@ with tab_opt:
             f"Sharpe={best['sharpe']:.2f}, ROI={best['roi']:+.1f}%, "
             f"WR={best['winrate']:.0f}%, Сделок={int(best['total'])}"
         )
+
+# ===========================================================================
+# ВКЛАДКА 3: ТРЕНАЖЁР
+# ===========================================================================
+with tab_sim:
+    st.markdown(
+        "Пошаговое воспроизведение торговли на реальной истории. "
+        "**График показывает только прошлое** — будущего не видно."
+    )
+
+    # --- Параметры тренажёра ---
+    col_sm, col_sp = st.columns([1, 3])
+    with col_sm:
+        is_auto = (
+            st.radio("Режим", ["🖐 Полуавтомат", "🤖 Полный автомат"], key="sim_mode_radio")
+            == "🤖 Полный автомат"
+        )
+    with col_sp:
+        spc1, spc2, spc3 = st.columns(3)
+        sim_dep  = spc1.number_input("Депозит ₽", value=10_000, step=1_000, key="sim_dep_inp")
+        sim_stop = spc2.slider("Стоп ₽",  0.5, 10.0, 3.0, 0.5, key="sim_stop_sl")
+        sim_tgt  = spc3.slider("Тейк ₽",  0.0,  2.0, 0.5, 0.1, key="sim_tgt_sl")
+
+    # --- Инициализация / сброс session_state ---
+    _sim_df_key = len(df)
+    _need_init  = (
+        "sim_cursor" not in st.session_state
+        or st.session_state.get("sim_df_key") != _sim_df_key
+    )
+    if _need_init:
+        st.session_state.update({
+            "sim_cursor":         0,
+            "sim_position":       None,
+            "sim_trades":         [],
+            "sim_capital":        float(sim_dep),
+            "sim_cooldown_end":   0,
+            "sim_last_processed": -1,
+            "sim_df_key":         _sim_df_key,
+        })
+
+    if st.button("🔄 Сбросить", key="sim_rst"):
+        st.session_state.update({
+            "sim_cursor":         0,
+            "sim_position":       None,
+            "sim_trades":         [],
+            "sim_capital":        float(sim_dep),
+            "sim_cooldown_end":   0,
+            "sim_last_processed": -1,
+        })
+        st.rerun()
+
+    cursor  = st.session_state["sim_cursor"]
+    n_total = len(df)
+
+    # --- Обработка текущей свечи (один раз за позицию курсора) ---
+    if st.session_state["sim_last_processed"] != cursor and cursor < n_total:
+        _row = df.iloc[cursor]
+        _spr = _row["spread"]
+        _rat = _row["ratio_h"]
+        _ts  = _row["begin"]
+        _pos = st.session_state["sim_position"]
+
+        # Проверка TP / SL
+        if _pos is not None:
+            _stop_lv = _pos["entry_spread"] + sim_stop
+            _rt = _ex = None
+            if _spr <= sim_tgt:
+                _rt, _ex = "TP", sim_tgt
+            elif _spr >= _stop_lv:
+                _rt, _ex = "SL", _stop_lv
+            if _rt:
+                _comm = _pos["lots"] * 4 * 0.05
+                _pnl  = (_pos["entry_spread"] - _ex) * _pos["lots"] - _comm
+                st.session_state["sim_capital"] += _pnl
+                st.session_state["sim_trades"].append({
+                    "Вход":       _pos["entry_time"].strftime("%d.%m %H:%M"),
+                    "entry_ts":   _pos["entry_time"],
+                    "exit_ts":    _ts,
+                    "Выход":      _ts.strftime("%d.%m %H:%M"),
+                    "Сигнал":     _pos["signal"],
+                    "Спред вх.":  round(_pos["entry_spread"], 2),
+                    "Спред вых.": round(_ex, 2),
+                    "Лотов":      _pos["lots"],
+                    "P&L ₽":      round(_pnl, 2),
+                    "Результат":  "✅ TP" if _rt == "TP" else "🛑 SL",
+                    "Капитал":    round(st.session_state["sim_capital"], 2),
+                    "hour":       _ts.hour,
+                })
+                st.session_state["sim_position"] = None
+                st.session_state["sim_cooldown_end"] = cursor + 5
+                _pos = None
+
+        # Авто-вход (только полный автомат)
+        if is_auto and _pos is None and cursor >= st.session_state["sim_cooldown_end"]:
+            _sig, _, _ = calc_signal(_spr, _rat)
+            if _sig in {"LONG_SCALP", "LONG_GOOD"}:
+                _ep = calc_entry_params(_spr, float(sim_dep), sim_stop, sim_tgt)
+                if _ep["rr"] >= 2.0:
+                    st.session_state["sim_position"] = {
+                        "entry_time":   _ts,
+                        "entry_spread": _spr,
+                        "signal":       _sig,
+                        "lots":         _ep["lots"],
+                    }
+
+        st.session_state["sim_last_processed"] = cursor
+
+    # --- Читаем актуальное состояние для отображения ---
+    cursor         = st.session_state["sim_cursor"]
+    position       = st.session_state["sim_position"]
+    capital        = st.session_state["sim_capital"]
+    sim_trades_lst = st.session_state["sim_trades"]
+
+    if cursor >= n_total:
+        st.success(f"✅ Все {n_total} свечей просмотрены!")
+        cursor = n_total - 1
+
+    _row   = df.iloc[cursor]
+    spread = _row["spread"]
+    ratio  = _row["ratio_h"]
+    ts     = _row["begin"]
+    signal, signal_desc, sig_type = calc_signal(spread, ratio)
+    ep     = calc_entry_params(spread, float(sim_dep), sim_stop, sim_tgt)
+
+    in_cooldown = cursor < st.session_state["sim_cooldown_end"]
+    can_enter   = (
+        position is None
+        and not in_cooldown
+        and signal in {"LONG_SCALP", "LONG_GOOD"}
+        and ep["rr"] >= 2.0
+    )
+
+    # --- Информационные метрики ---
+    mi1, mi2, mi3, mi4, mi5 = st.columns(5)
+    mi1.metric("Свеча",   f"{cursor + 1} / {n_total}")
+    mi2.metric("Время",   ts.strftime("%d.%m %H:%M"))
+    mi3.metric("Спред",   f"{spread:.2f} ₽")
+    mi4.metric("Ratio",   f"{ratio:.4f}")
+    mi5.metric("Капитал", f"{capital:.0f} ₽",
+               delta=f"{capital - float(sim_dep):+.0f} ₽")
+
+    # Сигнал
+    _icons = {"success": "🟢", "warning": "🟡", "error": "🔴", "info": "⚪"}
+    st.markdown(
+        f"**Сигнал:** {_icons.get(sig_type, '⚪')} **{signal}** — {signal_desc}"
+        + (" *(cooldown)*" if in_cooldown else "")
+    )
+
+    # Параметры входа
+    if signal in {"LONG_SCALP", "LONG_GOOD"}:
+        pe1, pe2, pe3, pe4, pe5 = st.columns(5)
+        pe1.metric("Лотов",     ep["lots"])
+        pe2.metric("Комиссия",  f"{ep['commission']:.2f} ₽")
+        pe3.metric("Потенциал", f"{ep['profit_net']:+.2f} ₽")
+        pe4.metric("Риск",      f"{ep['risk']:.2f} ₽")
+        pe5.metric("R/R",       f"{ep['rr']:.2f}",
+                   delta="✅ OK" if ep["rr"] >= 2.0 else "❌ мало")
+
+    # Открытая позиция
+    if position is not None:
+        _stop_lv  = position["entry_spread"] + sim_stop
+        _cur_pnl  = (position["entry_spread"] - spread) * position["lots"] - position["lots"] * 4 * 0.05
+        st.info(
+            f"📊 **В позиции** | Вход: {position['entry_time'].strftime('%H:%M')} | "
+            f"Спред входа: {position['entry_spread']:.2f} ₽ | "
+            f"Тейк: ≤ {sim_tgt:.1f} ₽ | Стоп: ≥ {_stop_lv:.2f} ₽ | "
+            f"P&L сейчас: {_cur_pnl:+.2f} ₽"
+        )
+
+    # --- Кнопки навигации ---
+    nb1, nb2, nb3, _ = st.columns([1, 1, 1, 3])
+    with nb1:
+        if st.button("▶ Следующая", key="sim_next", disabled=cursor >= n_total - 1):
+            st.session_state["sim_cursor"] += 1
+            st.rerun()
+
+    if not is_auto:
+        # Полуавтомат: кнопки входа при сигнале
+        if can_enter:
+            with nb2:
+                if st.button("✅ Войти", key="sim_enter", type="primary"):
+                    st.session_state["sim_position"] = {
+                        "entry_time":   ts,
+                        "entry_spread": spread,
+                        "signal":       signal,
+                        "lots":         ep["lots"],
+                    }
+                    st.session_state["sim_last_processed"] = cursor
+                    st.session_state["sim_cursor"] += 1
+                    st.rerun()
+            with nb3:
+                if st.button("⏭ Пропустить", key="sim_skip"):
+                    st.session_state["sim_cursor"] += 1
+                    st.rerun()
+    else:
+        # Полный автомат: прокрутить всё до конца
+        with nb2:
+            if st.button("⏩ До конца", key="sim_run_all"):
+                run_sim_to_end(df, float(sim_dep), sim_stop, sim_tgt)
+                st.rerun()
+
+    # --- График (история до текущей свечи, будущего нет) ---
+    hist = df.iloc[: cursor + 1]
+    fig_sim = go.Figure()
+    fig_sim.add_trace(go.Scatter(
+        x=hist["begin"], y=hist["spread"],
+        name="Спред", line=dict(color="#9C27B0", width=1.5),
+    ))
+
+    for _lvl, _clr, _lbl in [
+        (sim_tgt, "lime",    f"Тейк {sim_tgt} ₽"),
+        (5.0,     "#FF9800", "Скальп 5.0 ₽"),
+        (7.0,     "#2196F3", "Хороший 7.0 ₽"),
+    ]:
+        fig_sim.add_hline(y=_lvl, line_dash="dash", line_color=_clr,
+                          annotation_text=_lbl, annotation_position="right")
+
+    for _tr in sim_trades_lst:
+        _clr_t = "lime" if "TP" in _tr["Результат"] else "#f85149"
+        fig_sim.add_trace(go.Scatter(
+            x=[_tr["entry_ts"]], y=[_tr["Спред вх."]],
+            mode="markers", marker=dict(color=_clr_t, size=10, symbol="triangle-up"),
+            showlegend=False,
+        ))
+        fig_sim.add_trace(go.Scatter(
+            x=[_tr["exit_ts"]], y=[_tr["Спред вых."]],
+            mode="markers", marker=dict(color=_clr_t, size=10, symbol="triangle-down"),
+            showlegend=False,
+        ))
+
+    if position is not None:
+        fig_sim.add_trace(go.Scatter(
+            x=[position["entry_time"]], y=[position["entry_spread"]],
+            mode="markers", name="Позиция",
+            marker=dict(color="yellow", size=13, symbol="triangle-up"),
+        ))
+
+    fig_sim.update_layout(height=320, margin=dict(l=40, r=80, t=20, b=20),
+                          hovermode="x unified", showlegend=False)
+    fig_sim.update_yaxes(title_text="Спред ₽", side="right")
+    st.plotly_chart(fig_sim, use_container_width=True)
+
+    # --- Лог сделок и итоговые метрики ---
+    if sim_trades_lst:
+        st.divider()
+        st.markdown("**📋 Лог сделок тренажёра**")
+        _cols_sim = ["Вход", "Выход", "Сигнал", "Спред вх.", "Спред вых.",
+                     "Лотов", "P&L ₽", "Результат", "Капитал"]
+        df_sim_log = (
+            pd.DataFrame(sim_trades_lst)[_cols_sim]
+            .iloc[::-1].reset_index(drop=True)
+        )
+        st.dataframe(df_sim_log, use_container_width=True, hide_index=True)
+
+        st.markdown("#### 📊 Итог тренажёра")
+        sim_stats = calc_stats(sim_trades_lst, float(sim_dep))
+        if sim_stats:
+            ms1, ms2, ms3, ms4, ms5 = st.columns(5)
+            ms1.metric("Сделок",  sim_stats["total"])
+            ms2.metric("Winrate", f"{sim_stats['winrate']:.0f}%")
+            ms3.metric("P&L",     f"{sim_stats['total_pnl']:+.0f} ₽")
+            ms4.metric("ROI",     f"{sim_stats['roi']:+.1f}%")
+            ms5.metric("Sharpe",  f"{sim_stats['sharpe']:.2f}")
