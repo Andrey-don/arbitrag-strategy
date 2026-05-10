@@ -5,6 +5,7 @@ MATS Backtester — тестирование стратегии ТАТок на 
 
 import os
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -20,6 +21,7 @@ load_dotenv()
 # Конфигурация
 # ---------------------------------------------------------------------------
 TINKOFF_TOKEN = os.getenv("TINKOFF_TOKEN", "")
+HISTORY_DIR   = Path(__file__).resolve().parent.parent.parent / "data" / "history"
 FIGI = {
     "TATN":  "BBG004RVFFC0",
     "TATNP": "BBG004S68829",
@@ -302,25 +304,75 @@ st.markdown(
 # ---------------------------------------------------------------------------
 # Sidebar — общие параметры и загрузка данных
 # ---------------------------------------------------------------------------
+# Переменные, которые нужны в блоке загрузки (за пределами with-блока)
+_data_source = "📡 T-Invest API"
+_csv_tf_key  = None
+date_from    = date_to = None
+tf           = 5
+
 with st.sidebar:
     st.header("⚙️ Параметры")
 
     st.subheader("Данные")
-    _today    = datetime.now().date()
-    _default_from = _today - timedelta(days=30)
-    date_from = st.date_input("Начало", value=_default_from, max_value=_today)
-    date_to   = st.date_input("Конец",  value=_today,        max_value=_today)
-    tf        = st.selectbox("Таймфрейм", [1, 5, 10, 15, 60], index=1,
-                             format_func=lambda x: f"{x} мин")
-    if date_from >= date_to:
-        st.warning("Начало должно быть раньше конца.")
-    st.divider()
+    _data_source = st.radio(
+        "Источник",
+        ["📡 T-Invest API", "💾 Локальный CSV"],
+        horizontal=True,
+        key="data_source_radio",
+    )
 
+    if _data_source == "📡 T-Invest API":
+        _today    = datetime.now().date()
+        date_from = st.date_input("Начало", value=_today - timedelta(days=30), max_value=_today)
+        date_to   = st.date_input("Конец",  value=_today, max_value=_today)
+        tf        = st.selectbox("Таймфрейм", [1, 5, 10, 15, 60], index=1,
+                                 format_func=lambda x: f"{x} мин")
+        if date_from >= date_to:
+            st.warning("Начало должно быть раньше конца.")
+    else:
+        # Сканируем доступные пары (TATN + TATNP оба файла должны существовать)
+        _pairs: dict[str, tuple] = {}
+        if HISTORY_DIR.exists():
+            for _f in sorted(HISTORY_DIR.glob("TATN_*.csv")):
+                _key = _f.stem[5:]  # "5min", "1h", ...
+                _fp  = HISTORY_DIR / f"TATNP_{_key}.csv"
+                if _fp.exists():
+                    _pairs[_key] = (_f, _fp)
+
+        if not _pairs:
+            st.warning(
+                "Нет файлов в `data/history/`.\n\n"
+                "Запустите **download_history.bat** чтобы скачать историю."
+            )
+        else:
+            _csv_tf_key = st.selectbox(
+                "Таймфрейм (файл)",
+                list(_pairs.keys()),
+                format_func=lambda k: f"TATN + TATNP  [{k}]",
+            )
+            _tf_rev = {"1min": 1, "5min": 5, "10min": 10, "15min": 15, "1h": 60}
+            tf = _tf_rev.get(_csv_tf_key, 5)
+
+            # Показываем диапазон файла и фильтр дат
+            try:
+                _info = pd.read_csv(_pairs[_csv_tf_key][0], usecols=["begin"],
+                                    parse_dates=["begin"])
+                _d0 = _info["begin"].min().date()
+                _d1 = _info["begin"].max().date()
+                st.caption(f"📁 {_d0} — {_d1} · {len(_info):,} свечей TATN")
+                date_from = st.date_input("Фильтр от", value=_d0, min_value=_d0, max_value=_d1,
+                                          key="csv_from")
+                date_to   = st.date_input("Фильтр до", value=_d1, min_value=_d0, max_value=_d1,
+                                          key="csv_to")
+            except Exception:
+                pass
+
+    st.divider()
     st.subheader("Общие")
-    deposit  = st.number_input("Депозит ₽",          value=10_000, step=1_000)
-    lots     = st.number_input("Лотов на сделку",    value=10, step=1, min_value=1)
-    slippage = st.slider("Слипадж ₽",                0.0, 2.0, 0.2, 0.1)
-    cooldown = st.slider("Cooldown, мин",            0, 60, 2, 1)
+    deposit  = st.number_input("Депозит ₽",       value=10_000, step=1_000)
+    lots     = st.number_input("Лотов на сделку", value=10, step=1, min_value=1)
+    slippage = st.slider("Слипадж ₽",             0.0, 2.0, 0.2, 0.1)
+    cooldown = st.slider("Cooldown, мин",          0, 60, 2, 1)
     st.divider()
 
     load_btn = st.button("📥 Загрузить данные", type="primary", use_container_width=True)
@@ -329,17 +381,28 @@ with st.sidebar:
 # Загрузка данных (в session_state)
 # ---------------------------------------------------------------------------
 if load_btn:
-    if date_from >= date_to:
-        st.error("Начало должно быть раньше конца.")
-        st.stop()
-    _from_dt = datetime(date_from.year, date_from.month, date_from.day)
-    _to_dt   = datetime(date_to.year,   date_to.month,   date_to.day, 23, 59, 59)
-    _days    = (date_to - date_from).days
-    with st.spinner(f"Загружаю свечи {date_from} — {date_to} ({tf} мин)..."):
-        df_t  = get_candles("TATN",  from_dt=_from_dt, to_dt=_to_dt, interval=tf)
-        df_tp = get_candles("TATNP", from_dt=_from_dt, to_dt=_to_dt, interval=tf)
+    if _data_source == "📡 T-Invest API":
+        if date_from is None or date_to is None or date_from >= date_to:
+            st.error("Укажите корректный диапазон дат.")
+            st.stop()
+        _from_dt = datetime(date_from.year, date_from.month, date_from.day)
+        _to_dt   = datetime(date_to.year,   date_to.month,   date_to.day, 23, 59, 59)
+        with st.spinner(f"Загружаю {date_from} — {date_to} ({tf} мин)…"):
+            df_t  = get_candles("TATN",  from_dt=_from_dt, to_dt=_to_dt, interval=tf)
+            df_tp = get_candles("TATNP", from_dt=_from_dt, to_dt=_to_dt, interval=tf)
+    else:
+        if _csv_tf_key is None:
+            st.error("Нет файлов. Запустите download_history.bat")
+            st.stop()
+        with st.spinner(f"Читаю {_csv_tf_key} CSV…"):
+            df_t  = pd.read_csv(HISTORY_DIR / f"TATN_{_csv_tf_key}.csv",  parse_dates=["begin"])
+            df_tp = pd.read_csv(HISTORY_DIR / f"TATNP_{_csv_tf_key}.csv", parse_dates=["begin"])
+        if date_from and date_to:
+            df_t  = df_t[(df_t["begin"].dt.date >= date_from) & (df_t["begin"].dt.date <= date_to)]
+            df_tp = df_tp[(df_tp["begin"].dt.date >= date_from) & (df_tp["begin"].dt.date <= date_to)]
+
     if df_t.empty or df_tp.empty:
-        st.error("Нет данных. Проверьте TINKOFF_TOKEN в .env и выбранный диапазон.")
+        st.error("Нет данных. Проверьте параметры загрузки.")
         st.stop()
     df_merged = (
         pd.merge(df_t, df_tp, on="begin", suffixes=("_tatn", "_tatnp"))
