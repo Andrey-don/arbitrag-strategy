@@ -738,6 +738,18 @@ with st.sidebar:
     st.divider()
     paper_mode = st.toggle("📋 Тренажёр", value=True,
                            help="Виртуальные сделки на реальных котировках")
+    st.divider()
+    auto_mode = st.toggle(
+        "🤖 Полный автомат", value=False,
+        help="Авто-вход и авто-выход без нажатия кнопок. В тренажёре — для тестирования логики.",
+    )
+    if auto_mode and not paper_mode and not DRY_RUN:
+        auto_daily_limit = st.number_input(
+            "Дневной лимит убытка ₽", value=400, step=100, min_value=100,
+            help="Авто-режим выключится если дневной убыток достигнет лимита",
+        )
+    else:
+        auto_daily_limit = 99_999
 
 
 # ---------------------------------------------------------------------------
@@ -753,6 +765,9 @@ for _k, _v in [
     ("real_position",        None),
     ("trade_history",        []),
     ("account_id",           None),
+    ("auto_log",             []),
+    ("daily_pnl",            0.0),
+    ("daily_date",           ""),
 ]:
     if _k not in st.session_state:
         st.session_state[_k] = _v
@@ -798,84 +813,220 @@ def live_dashboard(days: int, tf: int, paper: bool = True) -> None:
     c5.metric("Откл. от нормы", f"{spread_pct:.2f}%")
     c6.metric("Обновлено",     now)
 
-    # --- Сигнал + Alert Panel ---
+    # --- Сигнал ---
     code, desc, stype = calc_signal(spread_rub, ratio)
-
     ENTRY_SIGNALS = {"LONG_SCALP", "LONG_GOOD"}
 
-    # Активировать алерт при новом сигнале входа (если нет cooldown)
-    if (code in ENTRY_SIGNALS
-            and not st.session_state.alert_active
-            and time.time() > st.session_state.alert_cooldown_until):
-        st.session_state.alert_active = True
-        st.session_state.alert_time   = time.time()
-        st.session_state.alert_data   = calc_entry_params(spread_rub, price_tatn, price_tatnp)
-        st.session_state.alert_action = None
+    # Сбросить дневной P&L при смене даты
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    if st.session_state.daily_date != today_str:
+        st.session_state.daily_pnl  = 0.0
+        st.session_state.daily_date = today_str
 
-    # Таймаут: никто не нажал за 30 сек
-    if st.session_state.alert_active:
-        if time.time() - st.session_state.alert_time > ALERT_TIMEOUT_S:
-            st.session_state.alert_active       = False
-            st.session_state.alert_action       = "TIMEOUT"
-            st.session_state.alert_cooldown_until = time.time() + ALERT_COOLDOWN_S
+    daily_limit_hit = st.session_state.daily_pnl <= -auto_daily_limit
 
-    # --- Открыть позицию при подтверждении ---
-    if (st.session_state.alert_action == "APPROVED"
-            and st.session_state.paper_position is None
-            and st.session_state.real_position is None
-            and st.session_state.alert_data is not None):
-        p = st.session_state.alert_data
-        if paper or DRY_RUN:
-            # Тренажёр или DRY_RUN=true — виртуальная позиция
-            st.session_state.paper_position = {
-                "entry_time":   datetime.now(),
-                "entry_spread": spread_rub,
-                "entry_tatn":   price_tatn,
-                "entry_tatnp":  price_tatnp,
-                "lots":         p["lots"],
-                "commission":   p["commission"],
-            }
+    # =========================================================
+    # ПОЛНЫЙ АВТОМАТ
+    # =========================================================
+    if auto_mode:
+        # Баннер режима
+        if daily_limit_hit:
+            st.error(f"🛑 АВТО-РЕЖИМ: дневной лимит убытка достигнут "
+                     f"({st.session_state.daily_pnl:+.0f} ₽). Торговля остановлена.")
         else:
-            # Реальные ордера через T-Invest API
-            if not account_id:
-                st.error("❌ Не удалось получить account_id — проверьте TINKOFF_TOKEN")
-            else:
-                with st.spinner("⚙️ Выставляю ордера на биржу..."):
-                    result = execute_entry(p, account_id)
+            mode_label = "🤖 ПОЛНЫЙ АВТОМАТ" + (" · ТРЕНАЖЁР" if paper_mode else " · РЕАЛЬНЫЙ")
+            st.markdown(
+                f'<div style="background:#0d2137;border:1px solid #2196F3;border-radius:6px;'
+                f'padding:6px 14px;margin-bottom:8px;font-size:13px;color:#2196F3">'
+                f'<b>{mode_label}</b> &nbsp;·&nbsp; '
+                f'Дневной P&L: <b>{st.session_state.daily_pnl:+.0f} ₽</b> '
+                f'/ лимит −{auto_daily_limit:.0f} ₽</div>',
+                unsafe_allow_html=True,
+            )
+
+        # --- Авто-тейк: позиция открыта + спред сошёлся ---
+        if not daily_limit_hit:
+            if (st.session_state.real_position is not None
+                    and spread_rub <= TARGET_SPREAD
+                    and not paper_mode and not DRY_RUN):
+                pos = st.session_state.real_position
+                with st.spinner("🤖 Авто-тейк..."):
+                    result = close_position_real(pos, account_id)
                 if result["status"] == "OK":
-                    st.session_state.real_position = {
-                        "entry_time":   datetime.now(),
-                        "entry_spread": result["entry_spread"],
-                        "entry_tatn":   result["sell_price"],
-                        "entry_tatnp":  result["buy_price"],
-                        "lots":         p["lots"],
-                        "oid_buy":      result["oid_buy"],
-                        "oid_sell":     result["oid_sell"],
-                    }
+                    pnl = result["pnl"]
+                    st.session_state.daily_pnl += pnl
+                    st.session_state.trade_history.append({
+                        "Время входа":  pos["entry_time"].strftime("%H:%M:%S"),
+                        "Спред входа":  f"{pos['entry_spread']:.2f}",
+                        "Спред выхода": f"{result['close_spread']:.2f}",
+                        "Лотов":        pos["lots"],
+                        "P&L ₽":        f"{pnl:+.0f}",
+                        "Результат":    "✅ Авто-тейк",
+                        "Режим":        "РЕАЛЬНЫЙ",
+                    })
+                    st.session_state.real_position        = None
+                    st.session_state.alert_cooldown_until = time.time() + ALERT_COOLDOWN_S
+                    st.session_state.auto_log.insert(0,
+                        f"{now}  ✅ АВТО-ТЕЙК: P&L {pnl:+.0f} ₽, спред {result['close_spread']:.2f} ₽"
+                    )
+
+            # Авто-тейк в тренажёре
+            if (st.session_state.paper_position is not None
+                    and spread_rub <= TARGET_SPREAD
+                    and paper_mode):
+                pos = st.session_state.paper_position
+                commission_close = pos["lots"] * 4 * 0.05
+                pnl_gross = (pos["entry_spread"] - spread_rub) * pos["lots"]
+                pnl_net   = pnl_gross - pos["commission"] - commission_close
+                st.session_state.trade_history.append({
+                    "Время входа":  pos["entry_time"].strftime("%H:%M:%S"),
+                    "Спред входа":  f"{pos['entry_spread']:.2f}",
+                    "Спред выхода": f"{spread_rub:.2f}",
+                    "Лотов":        pos["lots"],
+                    "P&L ₽":        f"{pnl_net:+.0f}",
+                    "Результат":    "✅ Авто-тейк",
+                    "Режим":        "ТРЕНАЖЁР",
+                })
+                st.session_state.paper_position        = None
+                st.session_state.alert_cooldown_until  = time.time() + ALERT_COOLDOWN_S
+                st.session_state.auto_log.insert(0,
+                    f"{now}  ✅ АВТО-ТЕЙК (тренажёр): P&L {pnl_net:+.0f} ₽"
+                )
+
+            # --- Авто-вход: нет позиции + сигнал + cooldown прошёл ---
+            no_position = (st.session_state.real_position is None
+                           and st.session_state.paper_position is None)
+            if (no_position
+                    and code in ENTRY_SIGNALS
+                    and time.time() > st.session_state.alert_cooldown_until):
+                p = calc_entry_params(spread_rub, price_tatn, price_tatnp)
+                if p["rr"] >= MIN_RR:
+                    if paper_mode or DRY_RUN:
+                        # Авто-вход в тренажёре
+                        st.session_state.paper_position = {
+                            "entry_time":   datetime.now(),
+                            "entry_spread": spread_rub,
+                            "entry_tatn":   price_tatn,
+                            "entry_tatnp":  price_tatnp,
+                            "lots":         p["lots"],
+                            "commission":   p["commission"],
+                        }
+                        st.session_state.alert_cooldown_until = time.time() + ALERT_COOLDOWN_S
+                        st.session_state.auto_log.insert(0,
+                            f"{now}  🤖 АВТО-ВХОД (тренажёр): {code}, "
+                            f"спред {spread_rub:.2f} ₽, {p['lots']} лот., R/R {p['rr']:.1f}"
+                        )
+                    else:
+                        # Авто-вход реальный
+                        if not account_id:
+                            st.session_state.auto_log.insert(0, f"{now}  ❌ Нет account_id")
+                        else:
+                            with st.spinner(f"🤖 Авто-вход {code}..."):
+                                result = execute_entry(p, account_id)
+                            if result["status"] == "OK":
+                                st.session_state.real_position = {
+                                    "entry_time":   datetime.now(),
+                                    "entry_spread": result["entry_spread"],
+                                    "entry_tatn":   result["sell_price"],
+                                    "entry_tatnp":  result["buy_price"],
+                                    "lots":         p["lots"],
+                                    "oid_buy":      result["oid_buy"],
+                                    "oid_sell":     result["oid_sell"],
+                                }
+                                st.session_state.alert_cooldown_until = time.time() + ALERT_COOLDOWN_S
+                                st.session_state.auto_log.insert(0,
+                                    f"{now}  🤖 АВТО-ВХОД: {code}, "
+                                    f"спред {result['entry_spread']:.2f} ₽, "
+                                    f"{p['lots']} лот., R/R {p['rr']:.1f}"
+                                )
+                            else:
+                                st.session_state.auto_log.insert(0,
+                                    f"{now}  ❌ Авто-вход неудача: {result['reason']}"
+                                )
                 else:
-                    st.error(f"❌ Вход не удался: {result['reason']}")
-        st.session_state.alert_action = None
+                    st.session_state.auto_log.insert(0,
+                        f"{now}  ⏭ Пропуск {code}: R/R {p['rr']:.1f} < {MIN_RR}"
+                    )
+
+        # Обрезаем лог до 30 записей
+        st.session_state.auto_log = st.session_state.auto_log[:30]
+
+    # =========================================================
+    # ПОЛУАВТОМАТ (ручное подтверждение)
+    # =========================================================
+    else:
+        # Активировать алерт при новом сигнале входа
+        if (code in ENTRY_SIGNALS
+                and not st.session_state.alert_active
+                and time.time() > st.session_state.alert_cooldown_until):
+            st.session_state.alert_active = True
+            st.session_state.alert_time   = time.time()
+            st.session_state.alert_data   = calc_entry_params(spread_rub, price_tatn, price_tatnp)
+            st.session_state.alert_action = None
+
+        # Таймаут алерта
+        if st.session_state.alert_active:
+            if time.time() - st.session_state.alert_time > ALERT_TIMEOUT_S:
+                st.session_state.alert_active         = False
+                st.session_state.alert_action         = "TIMEOUT"
+                st.session_state.alert_cooldown_until = time.time() + ALERT_COOLDOWN_S
+
+        # Открыть позицию при нажатии РАЗРЕШИТЬ
+        if (st.session_state.alert_action == "APPROVED"
+                and st.session_state.paper_position is None
+                and st.session_state.real_position is None
+                and st.session_state.alert_data is not None):
+            p = st.session_state.alert_data
+            if paper_mode or DRY_RUN:
+                st.session_state.paper_position = {
+                    "entry_time":   datetime.now(),
+                    "entry_spread": spread_rub,
+                    "entry_tatn":   price_tatn,
+                    "entry_tatnp":  price_tatnp,
+                    "lots":         p["lots"],
+                    "commission":   p["commission"],
+                }
+            else:
+                if not account_id:
+                    st.error("❌ Не удалось получить account_id — проверьте TINKOFF_TOKEN")
+                else:
+                    with st.spinner("⚙️ Выставляю ордера на биржу..."):
+                        result = execute_entry(p, account_id)
+                    if result["status"] == "OK":
+                        st.session_state.real_position = {
+                            "entry_time":   datetime.now(),
+                            "entry_spread": result["entry_spread"],
+                            "entry_tatn":   result["sell_price"],
+                            "entry_tatnp":  result["buy_price"],
+                            "lots":         p["lots"],
+                            "oid_buy":      result["oid_buy"],
+                            "oid_sell":     result["oid_sell"],
+                        }
+                    else:
+                        st.error(f"❌ Вход не удался: {result['reason']}")
+            st.session_state.alert_action = None
 
     # --- Блок позиции (если открыта) ---
     if st.session_state.real_position is not None:
         _render_real_position(price_tatn, price_tatnp, account_id)
     elif st.session_state.paper_position is not None:
         _render_position(price_tatn, price_tatnp)
-    elif st.session_state.alert_active:
+    elif not auto_mode and st.session_state.alert_active:
         _render_alert(code)
     else:
-        # Обычная строка сигнала
+        # Строка сигнала
         label = f"**{code}** — {desc}"
         if stype == "success":   st.success(label)
         elif stype == "warning": st.warning(label)
         elif stype == "error":   st.error(label)
         else:                    st.info(label)
 
-        action = st.session_state.alert_action
-        if action == "SKIPPED":
-            st.info("⏭ Сигнал пропущен. Новый алерт через 2 мин.")
-        elif action == "TIMEOUT":
-            st.warning("⏱ Время истекло — сигнал отменён. Новый алерт через 2 мин.")
+        if not auto_mode:
+            action = st.session_state.alert_action
+            if action == "SKIPPED":
+                st.info("⏭ Сигнал пропущен. Новый алерт через 2 мин.")
+            elif action == "TIMEOUT":
+                st.warning("⏱ Время истекло — сигнал отменён. Новый алерт через 2 мин.")
 
     # --- Исторические свечи ---
     df_tatn  = get_candles("TATN",  days=days, interval=tf)
@@ -1078,6 +1229,15 @@ def live_dashboard(days: int, tf: int, paper: bool = True) -> None:
         st.dataframe(df_hist, use_container_width=True, hide_index=True)
         if st.button("🗑 Очистить историю", key="btn_clear_history"):
             st.session_state.trade_history = []
+
+    # --- Лог авто-режима ---
+    if auto_mode and st.session_state.auto_log:
+        st.divider()
+        with st.expander("🤖 Лог автомата", expanded=True):
+            for entry in st.session_state.auto_log:
+                st.caption(entry)
+            if st.button("🗑 Очистить лог", key="btn_clear_log"):
+                st.session_state.auto_log = []
 
 
 # Запускаем живой фрагмент
