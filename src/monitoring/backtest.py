@@ -27,6 +27,16 @@ HISTORY_DIR   = Path(__file__).resolve().parent.parent.parent / "data" / "histor
 FIGI = {
     "TATN":  "BBG004RVFFC0",
     "TATNP": "BBG004S68829",
+    "SBER":  "BBG004730N88",
+    "SBERP": "BBG0047315Y7",
+    "TGLD":  "TCS80A101X50",
+    "AKGD":  "BBG014M8NBM4",
+}
+
+KNOWN_PAIRS: dict[str, tuple[str, str]] = {
+    "TATN / TATNP  (Татнефть)": ("TATN",  "TATNP"),
+    "SBER / SBERP  (Сбербанк)": ("SBER",  "SBERP"),
+    "TGLD / AKGD   (Золото ETF)": ("TGLD", "AKGD"),
 }
 _TINVEST_BASE = "https://invest-public-api.tinkoff.ru/rest"
 _TF_MAP = {
@@ -298,9 +308,10 @@ def run_sim_to_end(df: pd.DataFrame, deposit: float, stop_add: float, target: fl
 # Streamlit UI
 # ---------------------------------------------------------------------------
 st.set_page_config(page_title="MATS Backtester", page_icon="📊", layout="wide")
+_pair_title = st.session_state.get("selected_pair", list(KNOWN_PAIRS.keys())[0])
 st.markdown(
-    '<p style="font-size:1.1rem;font-weight:600;margin:0 0 4px 0">'
-    '📊 MATS Backtester — ТАТки (TATN / TATNP)</p>',
+    f'<p style="font-size:1.1rem;font-weight:600;margin:0 0 4px 0">'
+    f'📊 MATS Backtester — {_pair_title}</p>',
     unsafe_allow_html=True,
 )
 
@@ -317,6 +328,16 @@ with st.sidebar:
     st.header("⚙️ Параметры")
 
     st.subheader("Данные")
+    _pair_label = st.selectbox(
+        "Пара",
+        list(KNOWN_PAIRS.keys()),
+        key="selected_pair",
+    )
+    _ticker_a, _ticker_b = KNOWN_PAIRS[_pair_label]
+    # Сбрасываем загруженные данные если пара изменилась
+    if st.session_state.get("_loaded_pair") != _pair_label:
+        st.session_state.pop("df", None)
+
     _data_source = st.radio(
         "Источник",
         ["📡 T-Invest API", "💾 Локальный CSV"],
@@ -333,25 +354,26 @@ with st.sidebar:
         if date_from >= date_to:
             st.warning("Начало должно быть раньше конца.")
     else:
-        # Сканируем доступные пары (TATN + TATNP оба файла должны существовать)
+        # Сканируем доступные таймфреймы для выбранной пары
         _pairs: dict[str, tuple] = {}
         if HISTORY_DIR.exists():
-            for _f in sorted(HISTORY_DIR.glob("TATN_*.csv")):
-                _key = _f.stem[5:]  # "5min", "1h", ...
-                _fp  = HISTORY_DIR / f"TATNP_{_key}.csv"
+            _prefix_len = len(_ticker_a) + 1  # "SBER_" → 5
+            for _f in sorted(HISTORY_DIR.glob(f"{_ticker_a}_*.csv")):
+                _key = _f.stem[_prefix_len:]   # "1min", "5min", "1h", ...
+                _fp  = HISTORY_DIR / f"{_ticker_b}_{_key}.csv"
                 if _fp.exists():
                     _pairs[_key] = (_f, _fp)
 
         if not _pairs:
             st.warning(
-                "Нет файлов в `data/history/`.\n\n"
+                f"Нет файлов для **{_ticker_a}/{_ticker_b}** в `data/history/`.\n\n"
                 "Запустите **download_history.bat** чтобы скачать историю."
             )
         else:
             _csv_tf_key = st.selectbox(
                 "Таймфрейм (файл)",
                 list(_pairs.keys()),
-                format_func=lambda k: f"TATN + TATNP  [{k}]",
+                format_func=lambda k: f"{_ticker_a} + {_ticker_b}  [{k}]",
             )
             _tf_rev = {"1min": 1, "5min": 5, "10min": 10, "15min": 15, "1h": 60}
             tf = _tf_rev.get(_csv_tf_key, 5)
@@ -362,7 +384,7 @@ with st.sidebar:
                                     parse_dates=["begin"])
                 _d0 = _info["begin"].min().date()
                 _d1 = _info["begin"].max().date()
-                st.caption(f"📁 {_d0} — {_d1} · {len(_info):,} свечей TATN")
+                st.caption(f"📁 {_d0} — {_d1} · {len(_info):,} свечей {_ticker_a}")
                 date_from = st.date_input("Фильтр от", value=_d0, min_value=_d0, max_value=_d1,
                                           key="csv_from")
                 date_to   = st.date_input("Фильтр до", value=_d1, min_value=_d0, max_value=_d1,
@@ -441,15 +463,15 @@ if load_btn:
         _from_dt = datetime(date_from.year, date_from.month, date_from.day)
         _to_dt   = datetime(date_to.year,   date_to.month,   date_to.day, 23, 59, 59)
         with st.spinner(f"Загружаю {date_from} — {date_to} ({tf} мин)…"):
-            df_t  = get_candles("TATN",  from_dt=_from_dt, to_dt=_to_dt, interval=tf)
-            df_tp = get_candles("TATNP", from_dt=_from_dt, to_dt=_to_dt, interval=tf)
+            df_t  = get_candles(_ticker_a, from_dt=_from_dt, to_dt=_to_dt, interval=tf)
+            df_tp = get_candles(_ticker_b, from_dt=_from_dt, to_dt=_to_dt, interval=tf)
     else:
         if _csv_tf_key is None:
             st.error("Нет файлов. Запустите download_history.bat")
             st.stop()
         with st.spinner(f"Читаю {_csv_tf_key} CSV…"):
-            df_t  = pd.read_csv(HISTORY_DIR / f"TATN_{_csv_tf_key}.csv",  parse_dates=["begin"])
-            df_tp = pd.read_csv(HISTORY_DIR / f"TATNP_{_csv_tf_key}.csv", parse_dates=["begin"])
+            df_t  = pd.read_csv(HISTORY_DIR / f"{_ticker_a}_{_csv_tf_key}.csv", parse_dates=["begin"])
+            df_tp = pd.read_csv(HISTORY_DIR / f"{_ticker_b}_{_csv_tf_key}.csv", parse_dates=["begin"])
         if date_from and date_to:
             df_t  = df_t[(df_t["begin"].dt.date >= date_from) & (df_t["begin"].dt.date <= date_to)]
             df_tp = df_tp[(df_tp["begin"].dt.date >= date_from) & (df_tp["begin"].dt.date <= date_to)]
@@ -458,15 +480,44 @@ if load_btn:
         st.error("Нет данных. Проверьте параметры загрузки.")
         st.stop()
     df_merged = (
-        pd.merge(df_t, df_tp, on="begin", suffixes=("_tatn", "_tatnp"))
+        pd.merge(df_t, df_tp, on="begin", suffixes=("_a", "_b"))
         .sort_values("begin").reset_index(drop=True)
     )
-    df_merged["spread"]  = df_merged["close_tatn"] - df_merged["close_tatnp"]
-    df_merged["ratio_h"] = df_merged["close_tatn"]  / df_merged["close_tatnp"]
-    st.session_state["df"]        = df_merged
-    st.session_state["date_from"] = str(date_from)
-    st.session_state["date_to"]   = str(date_to)
-    st.session_state["tf"]        = tf
+
+    # ── Hedge ratio: уравновешиваем ноги по стоимости ────────────────────────
+    # Для TATN/TATNP и SBER/SBERP цены близки → hedge=1, спред в ₽ как раньше.
+    # Для TGLD/AKGD: TGLD≈13₽, AKGD≈270₽ → hedge≈21, нужно 21 лот TGLD на 1 лот AKGD.
+    _med_a = df_merged["close_a"].median()
+    _med_b = df_merged["close_b"].median()
+    if _med_b > _med_a * 1.5:
+        # B значительно дороже A: берём больше лотов A
+        _hedge = max(1, round(_med_b / _med_a))
+        _lots_a_per_b = _hedge   # лотов A на 1 лот B
+        df_merged["spread"] = df_merged["close_a"] * _hedge - df_merged["close_b"]
+    elif _med_a > _med_b * 1.5:
+        # A значительно дороже B: берём больше лотов B
+        _hedge = max(1, round(_med_a / _med_b))
+        _lots_a_per_b = 1        # лотов A = 1, лотов B = hedge
+        df_merged["spread"] = df_merged["close_a"] - df_merged["close_b"] * _hedge
+    else:
+        # Цены близки (TATN/TATNP, SBER/SBERP) → hedge=1
+        _hedge        = 1
+        _lots_a_per_b = 1
+        df_merged["spread"] = df_merged["close_a"] - df_merged["close_b"]
+
+    df_merged["ratio_h"] = df_merged["close_a"] / df_merged["close_b"]
+
+    st.session_state["df"]           = df_merged
+    st.session_state["date_from"]    = str(date_from)
+    st.session_state["date_to"]      = str(date_to)
+    st.session_state["tf"]           = tf
+    st.session_state["ticker_a"]     = _ticker_a
+    st.session_state["ticker_b"]     = _ticker_b
+    st.session_state["_loaded_pair"] = _pair_label
+    st.session_state["hedge_ratio"]  = _hedge
+    st.session_state["lots_a_per_b"] = _lots_a_per_b
+    st.session_state["price_a_med"]  = round(_med_a, 2)
+    st.session_state["price_b_med"]  = round(_med_b, 2)
 
 if "df" not in st.session_state:
     st.info("Нажмите **📥 Загрузить данные** в боковой панели.")
@@ -491,22 +542,66 @@ tab_bt, tab_opt, tab_sim = st.tabs(["📊 Бэктест", "🔍 Оптимиз�
 with tab_bt:
     col1, col2 = st.columns(2)
     with col1:
-        entry_scalp     = st.slider("Спред скальп ≥, ₽",      2.0, 50.0,  8.0, 0.5)
-        ratio_scalp     = st.slider("Ratio скальп ≥",         1.000, 1.020, 1.010, 0.001, format="%.3f")
-        stop_add        = st.slider("Стоп: доп. к спреду ₽",  0.5, 30.0,  5.0, 0.5)
+        entry_scalp     = st.slider("Спред скальп ≥, ₽",      0.05, 50.0,  8.0, 0.05)
+        ratio_scalp     = st.slider("Ratio скальп ≥",         1.000, 1.020, 1.010, 0.0001, format="%.4f")
+        stop_add        = st.slider("Стоп: доп. к спреду ₽",  0.05, 30.0,  5.0, 0.05)
     with col2:
-        entry_good      = st.slider("Спред хороший ≥, ₽",     3.0, 60.0, 10.0, 0.5)
-        ratio_good      = st.slider("Ratio хороший ≥",        1.000, 1.025, 1.013, 0.001, format="%.3f")
-        target          = st.slider("Тейк: спред схождения ₽", 0.0, 20.0,  1.0, 0.5)
+        entry_good      = st.slider("Спред хороший ≥, ₽",     0.05, 60.0, 10.0, 0.05)
+        ratio_good      = st.slider("Ratio хороший ≥",        1.000, 1.025, 1.013, 0.0001, format="%.4f")
+        target          = st.slider("Тейк: спред схождения ₽", 0.0, 20.0,  1.0, 0.05)
     max_entry_spread = st.slider(
         "⛔ Макс. спред входа ₽ (выше — не входить)",
-        5.0, 80.0, 15.0, 1.0,
+        0.05, 80.0, 15.0, 0.05,
         help="Фильтр структурных разрывов: если спред > этого значения — сигнал игнорируется"
     )
+
+    bt_moex_filter = st.checkbox(
+        "Только MOEX 10:00–23:50, Пн–Пт",
+        value=True, key="bt_moex_filter",
+        help="Убирает внебиржевые свечи (02:00–09:xx) и выходные дни.",
+    )
+
+    # ── Отображение лотов по ногам ───────────────────────────────────────────
+    _hedge      = st.session_state.get("hedge_ratio", 1)
+    _la_per_b   = st.session_state.get("lots_a_per_b", 1)
+    _price_a    = st.session_state.get("price_a_med", 0.0)
+    _price_b    = st.session_state.get("price_b_med", 0.0)
+    _ta_disp    = st.session_state.get("ticker_a", "A")
+    _tb_disp    = st.session_state.get("ticker_b", "B")
+
+    if _la_per_b > 1:
+        _lots_a_calc = max(1, round(lots * _la_per_b))
+        _lots_b_calc = lots
+    else:
+        _lots_a_calc = lots
+        _lots_b_calc = max(1, round(lots * _hedge)) if _hedge > 1 else lots
+
+    _cost_a = _lots_a_calc * _price_a
+    _cost_b = _lots_b_calc * _price_b
+
+    if _hedge > 1:
+        st.info(
+            f"⚖️ **Размер позиции** (hedge {_hedge}×):  "
+            f"**{_ta_disp}** = {_lots_a_calc} лот × {_price_a:.1f} ₽ ≈ {_cost_a:.0f} ₽  |  "
+            f"**{_tb_disp}** = {_lots_b_calc} лот × {_price_b:.1f} ₽ ≈ {_cost_b:.0f} ₽  |  "
+            f"Итого: ≈ {_cost_a + _cost_b:.0f} ₽"
+        )
+    else:
+        st.caption(
+            f"Размер позиции: {_ta_disp} = {_lots_a_calc} лот × {_price_a:.1f} ₽  |  "
+            f"{_tb_disp} = {_lots_b_calc} лот × {_price_b:.1f} ₽"
+        )
 
     run_bt = st.button("▶ Запустить бэктест", type="primary")
 
     if run_bt:
+        bt_df = df.copy()
+        if bt_moex_filter:
+            bt_df = bt_df[
+                (bt_df["begin"].dt.dayofweek < 5) &
+                (bt_df["begin"].dt.hour >= 10)
+            ].reset_index(drop=True)
+
         params = {
             "deposit":            float(deposit),
             "lots":               int(lots),
@@ -521,7 +616,7 @@ with tab_bt:
             "cooldown_s":         cooldown * 60,
             "commission_per_lot": 0.05,
         }
-        result = run_backtest(df, params)
+        result = run_backtest(bt_df, params)
         trades = result["trades"]
         stats  = calc_stats(trades, float(deposit))
         st.session_state["bt_stats"]  = stats
@@ -883,11 +978,25 @@ with tab_sim:
     with col_sp:
         spc1, spc2, spc3 = st.columns(3)
         sim_dep  = spc1.number_input("Депозит ₽", value=10_000, step=1_000, key="sim_dep_inp")
-        sim_stop = spc2.slider("Стоп ₽",  0.5, 10.0, 3.0, 0.5, key="sim_stop_sl")
-        sim_tgt  = spc3.slider("Тейк ₽",  0.0,  2.0, 0.5, 0.1, key="sim_tgt_sl")
+        sim_stop = spc2.slider("Стоп ₽",  0.5, 30.0, 3.0, 0.5, key="sim_stop_sl")
+        sim_tgt  = spc3.slider("Тейк ₽",  0.0, 25.0, 0.5, 0.1, key="sim_tgt_sl")
+
+    # --- Фильтр торговых часов MOEX ---
+    _moex_filter = st.checkbox(
+        "Только MOEX 10:00–23:50, Пн–Пт",
+        value=True, key="sim_moex_filter",
+        help="Убирает внебиржевые свечи T-Bank (02:00–09:xx) и выходные. May 9 (День Победы) фильтрует только по часам — проверяй вручную.",
+    )
+    if _moex_filter:
+        sim_df = df[
+            (df["begin"].dt.dayofweek < 5) &
+            (df["begin"].dt.hour >= 10)
+        ].reset_index(drop=True)
+    else:
+        sim_df = df.copy()
 
     # --- Инициализация / сброс session_state ---
-    _sim_df_key = len(df)
+    _sim_df_key = (len(sim_df), _moex_filter)
     _need_init  = (
         "sim_cursor" not in st.session_state
         or st.session_state.get("sim_df_key") != _sim_df_key
@@ -915,11 +1024,11 @@ with tab_sim:
         st.rerun()
 
     cursor  = st.session_state["sim_cursor"]
-    n_total = len(df)
+    n_total = len(sim_df)
 
     # --- Обработка текущей свечи (один раз за позицию курсора) ---
     if st.session_state["sim_last_processed"] != cursor and cursor < n_total:
-        _row = df.iloc[cursor]
+        _row = sim_df.iloc[cursor]
         _spr = _row["spread"]
         _rat = _row["ratio_h"]
         _ts  = _row["begin"]
@@ -980,7 +1089,7 @@ with tab_sim:
         st.success(f"✅ Все {n_total} свечей просмотрены!")
         cursor = n_total - 1
 
-    _row   = df.iloc[cursor]
+    _row   = sim_df.iloc[cursor]
     spread = _row["spread"]
     ratio  = _row["ratio_h"]
     ts     = _row["begin"]
@@ -1033,16 +1142,54 @@ with tab_sim:
         )
 
     # --- Кнопки навигации ---
-    nb1, nb2, nb3, nb4 = st.columns([1, 1, 1, 1])
+    nb1, nb2, nb3, nb4, nb5 = st.columns([1, 1, 1, 1, 1])
     with nb1:
-        if st.button("▶ Следующая", key="sim_next", disabled=cursor >= n_total - 1):
+        if st.button("▶ +1 свеча", key="sim_next", disabled=cursor >= n_total - 1):
             st.session_state["sim_cursor"] += 1
+            st.rerun()
+
+    # Кнопка "Весь период" — прокрутить всё, закрыть позицию если есть, новых входов нет
+    with nb2:
+        if st.button("⏩ Весь период", key="sim_all_period", disabled=cursor >= n_total - 1):
+            _c = st.session_state["sim_cursor"]
+            while _c < n_total:
+                _r   = sim_df.iloc[_c]
+                _pos = st.session_state["sim_position"]
+                if _pos is not None:
+                    _sl = _pos["entry_spread"] + sim_stop
+                    _rt = _ex = None
+                    if _r["spread"] <= sim_tgt:
+                        _rt, _ex = "TP", sim_tgt
+                    elif _r["spread"] >= _sl:
+                        _rt, _ex = "SL", _sl
+                    if _rt:
+                        _comm = _pos["lots"] * 4 * 0.05
+                        _pnl  = (_pos["entry_spread"] - _ex) * _pos["lots"] - _comm
+                        st.session_state["sim_capital"] += _pnl
+                        st.session_state["sim_trades"].append({
+                            "Вход":       _pos["entry_time"].strftime("%d.%m %H:%M"),
+                            "entry_ts":   _pos["entry_time"],
+                            "exit_ts":    _r["begin"],
+                            "Выход":      _r["begin"].strftime("%d.%m %H:%M"),
+                            "Сигнал":     _pos["signal"],
+                            "Спред вх.":  round(_pos["entry_spread"], 2),
+                            "Спред вых.": round(_ex, 2),
+                            "Лотов":      _pos["lots"],
+                            "P&L ₽":      round(_pnl, 2),
+                            "Результат":  "✅ TP" if _rt == "TP" else "🛑 SL",
+                            "Капитал":    round(st.session_state["sim_capital"], 2),
+                            "hour":       _r["begin"].hour,
+                        })
+                        st.session_state["sim_position"] = None
+                _c += 1
+            st.session_state["sim_cursor"] = n_total - 1
+            st.session_state["sim_last_processed"] = n_total - 1
             st.rerun()
 
     if not is_auto:
         # Полуавтомат: кнопки входа при сигнале
         if can_enter:
-            with nb2:
+            with nb3:
                 if st.button("✅ Войти", key="sim_enter", type="primary"):
                     st.session_state["sim_position"] = {
                         "entry_time":   ts,
@@ -1053,19 +1200,19 @@ with tab_sim:
                     st.session_state["sim_last_processed"] = cursor
                     st.session_state["sim_cursor"] += 1
                     st.rerun()
-            with nb3:
+            with nb4:
                 if st.button("⏭ Пропустить", key="sim_skip"):
                     st.session_state["sim_cursor"] += 1
                     st.rerun()
     else:
-        # Полный автомат: прокрутить всё до конца
-        with nb2:
-            if st.button("⏩ До конца", key="sim_run_all"):
-                run_sim_to_end(df, float(sim_dep), sim_stop, sim_tgt)
+        # Полный автомат: прокрутить всё с авто-входами
+        with nb3:
+            if st.button("🤖 До конца (авто)", key="sim_run_all"):
+                run_sim_to_end(sim_df, float(sim_dep), sim_stop, sim_tgt)
                 st.rerun()
 
     # LLM-советник (общий для обоих режимов)
-    with nb4:
+    with nb5:
         if st.button("💬 Совет LLM", key="sim_llm_btn"):
             _analyst = LLMAnalyst(_llm_provider, _llm_model, _llm_api_key)
             with st.spinner(f"Запрашиваю {_llm_provider}…"):
@@ -1086,45 +1233,148 @@ with tab_sim:
             st.markdown(st.session_state["sim_llm_result"])
 
     # --- График (история до текущей свечи, будущего нет) ---
-    hist = df.iloc[: cursor + 1]
-    fig_sim = go.Figure()
+    # Схема как в курсе Клевцова: верхний=цены₽, средний=разница, нижний=ratio
+    hist = sim_df.iloc[: cursor + 1]
+
+    fig_sim = make_subplots(
+        rows=3, cols=1,
+        shared_xaxes=True,
+        row_heights=[0.40, 0.35, 0.25],
+        vertical_spacing=0.05,
+    )
+
+    # ── Панель 1: абсолютные цены ₽, ЕДИНАЯ ось ──────────────────────────────
+    # Принципиально: одна ось — пересечение линий = реальное равенство цен.
+    # Dual-axis (secondary_y) создавал иллюзию пересечений при реальном спреде 29₽.
+    _ta = st.session_state.get("ticker_a", "A")
+    _tb = st.session_state.get("ticker_b", "B")
+    fig_sim.add_trace(go.Scatter(
+        x=hist["begin"], y=hist["close_a"],
+        name=_ta, line=dict(color="#FF9800", width=1.8),
+    ), row=1, col=1)
+    fig_sim.add_trace(go.Scatter(
+        x=hist["begin"], y=hist["close_b"],
+        name=_tb, line=dict(color="#2196F3", width=1.8),
+    ), row=1, col=1)
+
+    # Диапазон охватывает оба инструмента — видны реальный зазор и микродвижения
+    _p_min = min(hist["close_a"].min(), hist["close_b"].min())
+    _p_max = max(hist["close_a"].max(), hist["close_b"].max())
+    _p_pad = max(_p_max - _p_min, 5.0) * 0.15
+    fig_sim.update_yaxes(
+        side="right", tickformat=".2f", ticksuffix=" ₽",
+        range=[_p_min - _p_pad, _p_max + _p_pad],
+        row=1, col=1,
+    )
+
+    # ── Панель 2: спред ₽ (TATN − TATNP), белая линия = 0 ───────────────────
     fig_sim.add_trace(go.Scatter(
         x=hist["begin"], y=hist["spread"],
-        name="Спред", line=dict(color="#9C27B0", width=1.5),
-    ))
-
+        name="Спред ₽", line=dict(color="#4CAF50", width=1.5),
+        showlegend=False,
+    ), row=2, col=1)
+    # Белая линия = 0 через trace (add_hline ненадёжен с secondary_y specs)
+    fig_sim.add_trace(go.Scatter(
+        x=[hist["begin"].iloc[0], hist["begin"].iloc[-1]], y=[0, 0],
+        mode="lines", line=dict(color="white", width=2, dash="solid"),
+        showlegend=False, hoverinfo="skip",
+    ), row=2, col=1)
     for _lvl, _clr, _lbl in [
-        (sim_tgt, "lime",    f"Тейк {sim_tgt} ₽"),
+        (sim_tgt, "lime",    f"Тейк {sim_tgt:.1f} ₽"),
         (5.0,     "#FF9800", "Скальп 5.0 ₽"),
         (7.0,     "#2196F3", "Хороший 7.0 ₽"),
     ]:
         fig_sim.add_hline(y=_lvl, line_dash="dash", line_color=_clr,
-                          annotation_text=_lbl, annotation_position="right")
+                          annotation_text=_lbl, annotation_position="right",
+                          row=2, col=1)
 
+    # Адаптивный диапазон: показывает реальную вариацию, 0 всегда виден
+    _sp_mn  = hist["spread"].min()
+    _sp_mx  = hist["spread"].max()
+    _sp_pad = max((_sp_mx - _sp_mn) * 0.3, 1.0)
+    fig_sim.update_yaxes(
+        side="right", tickformat=".2f", ticksuffix=" ₽",
+        range=[min(0.0, _sp_mn - _sp_pad), _sp_mx + _sp_pad],
+        row=2, col=1,
+    )
+
+    # Маркеры сделок на спреде
     for _tr in sim_trades_lst:
         _clr_t = "lime" if "TP" in _tr["Результат"] else "#f85149"
         fig_sim.add_trace(go.Scatter(
             x=[_tr["entry_ts"]], y=[_tr["Спред вх."]],
             mode="markers", marker=dict(color=_clr_t, size=10, symbol="triangle-up"),
             showlegend=False,
-        ))
+        ), row=2, col=1)
         fig_sim.add_trace(go.Scatter(
             x=[_tr["exit_ts"]], y=[_tr["Спред вых."]],
             mode="markers", marker=dict(color=_clr_t, size=10, symbol="triangle-down"),
             showlegend=False,
-        ))
+        ), row=2, col=1)
 
     if position is not None:
         fig_sim.add_trace(go.Scatter(
             x=[position["entry_time"]], y=[position["entry_spread"]],
             mode="markers", name="Позиция",
             marker=dict(color="yellow", size=13, symbol="triangle-up"),
-        ))
+            showlegend=False,
+        ), row=2, col=1)
 
-    fig_sim.update_layout(height=320, margin=dict(l=40, r=80, t=20, b=20),
-                          hovermode="x unified", showlegend=False)
-    fig_sim.update_yaxes(title_text="Спред ₽", side="right")
+    # ── Панель 3: ratio TATN/TATNP, белая линия = 1.0 ────────────────────────
+    fig_sim.add_trace(go.Scatter(
+        x=hist["begin"], y=hist["ratio_h"],
+        name="Ratio", line=dict(color="#9C27B0", width=1.2),
+        showlegend=False,
+    ), row=3, col=1)
+    # Белая линия = 1.0 через trace
+    fig_sim.add_trace(go.Scatter(
+        x=[hist["begin"].iloc[0], hist["begin"].iloc[-1]], y=[1.0, 1.0],
+        mode="lines", line=dict(color="white", width=2, dash="solid"),
+        showlegend=False, hoverinfo="skip",
+    ), row=3, col=1)
+    fig_sim.add_hline(y=1.008, line_dash="dash", line_color="#FF9800",
+                      annotation_text="1.008 скальп", annotation_position="right", row=3, col=1)
+    fig_sim.add_hline(y=1.011, line_dash="dash", line_color="#2196F3",
+                      annotation_text="1.011 хор.", annotation_position="right", row=3, col=1)
+
+    # Зум ratio — видны микродвижения
+    _r_lo  = hist["ratio_h"].min()
+    _r_hi  = hist["ratio_h"].max()
+    _r_pad = max((_r_hi - _r_lo) * 0.5, 0.0005)
+    fig_sim.update_yaxes(
+        side="right", tickformat=".4f",
+        range=[_r_lo - _r_pad, _r_hi + _r_pad],
+        row=3, col=1,
+    )
+
+    # ── Вертикальные линии на все 3 панели (каждый час) ──────────────────────
+    _vl_freq = "4h" if (hist["begin"].max() - hist["begin"].min()).days > 2 else "1h"
+    _vl_times = pd.date_range(
+        start=hist["begin"].min().floor("h"),
+        end=hist["begin"].max(),
+        freq=_vl_freq,
+    )
+    for _vt in _vl_times:
+        for _vrow in (1, 2, 3):
+            fig_sim.add_vline(
+                x=_vt, line_width=1,
+                line_color="rgba(160,160,160,0.2)",
+                line_dash="solid", row=_vrow, col=1,
+            )
+
+    # ── Общий layout ─────────────────────────────────────────────────────────
+    fig_sim.update_layout(
+        height=640,
+        margin=dict(l=60, r=90, t=20, b=20),
+        hovermode="x unified",
+        legend=dict(orientation="h", y=1.03, font=dict(size=12)),
+    )
     st.plotly_chart(fig_sim, use_container_width=True)
+    st.caption(
+        f"Верхний: цены ₽ ({_ta} оранж., {_tb} синий)  |  "
+        f"Средний: спред ₽ ({_ta} − {_tb}), белая линия = 0  |  "
+        f"Нижний: ratio {_ta}/{_tb}, белая линия = 1.0"
+    )
 
     # --- Лог сделок и итоговые метрики ---
     if sim_trades_lst:

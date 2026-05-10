@@ -4,10 +4,12 @@ MATS History Downloader — загрузка исторических данны
 Скачивает: 1-мин и 5-мин (напрямую с API)
 Генерирует: 15-мин и 1-час (пересемплирование из 5-мин, без лишних запросов)
 
-Запуск: python src/monitoring/download_history.py
+Запуск (последние 3 мес.):  python src/monitoring/download_history.py
+Запуск (свой диапазон):     python src/monitoring/download_history.py --from 2024-01-01 --to 2024-12-31
 Или:    двойной клик на download_history.bat
 """
 
+import argparse
 import os
 import sys
 import time
@@ -31,22 +33,32 @@ _BASE = "https://invest-public-api.tinkoff.ru/rest"
 # Добавить новый инструмент: найди FIGI через T-Invest API (FindInstrument)
 # или на https://www.tinkoff.ru/invest/ → страница инструмента → URL.
 INSTRUMENTS: dict[str, str] = {
-    "TATN":  "BBG004RVFFC0",   # Татнефть обыкновенная
-    "TATNP": "BBG004S68829",   # Татнефть привилегированная
+    # ── Татнефть (2026: сломана, дивидендный гэп) ─────────────────────
+    # Раскомментировать только для загрузки 2024 данных вручную.
+    # "TATN":  "BBG004RVFFC0",   # Татнефть обыкновенная
+    # "TATNP": "BBG004S68829",   # Татнефть привилегированная
     # ── Золото ───────────────────────────────────────────────────────────
-    # Пара TGLD/AKGD — аналог ТАТок: два ETF на физ. золото.
-    # Спред между ними = арбитражная возможность.
-    "TGLD":  "TCS80A101X50",   # Т-Капитал Золото (ETF, ~13 руб./лот)
+    "TGLD":  "TCS80A101X50",   # Т-Капитал Золото (ETF)
     "AKGD":  "BBG014M8NBM4",   # Альфа-Капитал Золото (ETF)
-    # Альтернативы:
+    # ── Сбербанк ─────────────────────────────────────────────────────────
+    "SBER":  "BBG004730N88",   # Сбербанк обыкновенная
+    "SBERP": "BBG0047315Y7",   # Сбербанк привилегированная
+    # ── Кандидаты (раскомментировать для проверки) ───────────────────────
     # "SBGD":  "BBG019HZM0H0",   # Первая — Доступное Золото (ETF)
-    # "GLDRUB_TOM": "BBG000VJ5YR4",  # Биржевое золото спот (пара с GD-фьючерсом)
-    # ── Другие акционные пары ────────────────────────────────────────────
-    # "SBER":  "BBG004730N88",   # Сбербанк обыкновенная
-    # "SBERP": "BBG0047315Y7",   # Сбербанк привилегированная
-    # "GAZP":  "BBG004730RP0",   # Газпром
-    # "LKOH":  "BBG004731032",   # Лукойл
+    # "SNGS":  "BBG004S681W1",   # Сургутнефтегаз обыкновенная
+    # "SNGSP": "BBG004S68614",   # Сургутнефтегаз привилегированная
+    # "MTLR":  "BBG004S68473",   # Мечел обыкновенная
+    # "MTLRP": "BBG004S682Z6",   # Мечел привилегированная
+    # "RTKM":  "BBG004S682Z6",   # Ростелеком обыкновенная
+    # "RTKMP": "BBG004RVYMS2",   # Ростелеком привилегированная
 }
+
+# ─── Пары для анализа порогов ─────────────────────────────────────────────────
+PAIRS: list[tuple[str, str]] = [
+    ("TATN",  "TATNP"),
+    ("TGLD",  "AKGD"),
+    ("SBER",  "SBERP"),
+]
 
 # ─── Параметры загрузки ───────────────────────────────────────────────────────
 MONTHS_BACK = 3        # глубина истории в месяцах
@@ -134,6 +146,106 @@ def tf_label(tf: int) -> str:
     return f"{tf}min" if tf < 60 else "1h"
 
 
+def _parse_args() -> tuple[datetime, datetime]:
+    """Возвращает (from_dt, to_dt) — из CLI-аргументов или интерактивного ввода."""
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--from", dest="date_from", default=None,
+                        help="Начало периода YYYY-MM-DD")
+    parser.add_argument("--to",   dest="date_to",   default=None,
+                        help="Конец периода YYYY-MM-DD (по умолчанию: сегодня)")
+    args, _ = parser.parse_known_args()
+
+    to_dt = datetime.now()
+
+    if args.date_from:
+        # Режим CLI: --from 2024-01-01 --to 2024-12-31
+        from_dt = datetime.strptime(args.date_from, "%Y-%m-%d")
+        if args.date_to:
+            to_dt = datetime.strptime(args.date_to, "%Y-%m-%d").replace(
+                hour=23, minute=59, second=59
+            )
+    else:
+        # Интерактивный режим — спрашиваем в консоли
+        print("=" * 65)
+        print("  MATS History Downloader — выбор периода")
+        print("=" * 65)
+        print(f"  Инструменты: {', '.join(INSTRUMENTS)}")
+        print(f"  Таймфреймы:  {', '.join(tf_label(t) for t in DOWNLOAD_TF)} + 15min, 1h (из 5-мин)")
+        print()
+        print("  1) Последние 3 месяца (по умолчанию)")
+        print("  2) Свой диапазон дат")
+        print("  3) Готовые пресеты:")
+        print("     a) 2024 год (нормальный рынок ТАТок)")
+        print("     b) 2023 год")
+        print("     c) Последний год")
+        print()
+        choice = input("  Выбор [1/2/3a/3b/3c, Enter=1]: ").strip().lower()
+
+        if choice == "2":
+            raw_from = input("  Начало (YYYY-MM-DD): ").strip()
+            raw_to   = input("  Конец  (YYYY-MM-DD, Enter=сегодня): ").strip()
+            from_dt  = datetime.strptime(raw_from, "%Y-%m-%d")
+            if raw_to:
+                to_dt = datetime.strptime(raw_to, "%Y-%m-%d").replace(
+                    hour=23, minute=59, second=59
+                )
+        elif choice == "3a":
+            from_dt = datetime(2024, 1, 1)
+            to_dt   = datetime(2024, 12, 31, 23, 59, 59)
+        elif choice == "3b":
+            from_dt = datetime(2023, 1, 1)
+            to_dt   = datetime(2023, 12, 31, 23, 59, 59)
+        elif choice == "3c":
+            from_dt = to_dt - timedelta(days=365)
+        else:
+            from_dt = to_dt - timedelta(days=30 * MONTHS_BACK)
+
+    return from_dt, to_dt
+
+
+def print_pair_thresholds(ticker_a: str, ticker_b: str, tf: str = "1min") -> None:
+    """Рассчитать и вывести рекомендуемые пороги для пары из скачанных CSV."""
+    fa = HISTORY_DIR / f"{ticker_a}_{tf}.csv"
+    fb = HISTORY_DIR / f"{ticker_b}_{tf}.csv"
+    if not fa.exists() or not fb.exists():
+        print(f"  ⚠ {ticker_a}/{ticker_b}: CSV не найдены, пропуск")
+        return
+    try:
+        da = pd.read_csv(fa, parse_dates=["begin"])
+        db = pd.read_csv(fb, parse_dates=["begin"])
+        merged = pd.merge(da, db, on="begin", suffixes=("_a", "_b"))
+        merged = merged[
+            (merged["begin"].dt.dayofweek < 5) &
+            (merged["begin"].dt.hour >= 10)
+        ].copy()
+        if len(merged) < 50:
+            print(f"  ⚠ {ticker_a}/{ticker_b}: мало данных ({len(merged)} свечей)")
+            return
+
+        spread = merged["close_a"] - merged["close_b"]
+        ratio  = merged["close_a"] / merged["close_b"]
+        pos    = spread[spread > 0]
+
+        p75 = pos.quantile(0.75)  if len(pos) > 10 else spread.abs().quantile(0.75)
+        p90 = pos.quantile(0.90)  if len(pos) > 10 else spread.abs().quantile(0.90)
+        p95 = pos.quantile(0.95)  if len(pos) > 10 else spread.abs().quantile(0.95)
+        mean_sp = spread.mean()
+        std_sp  = spread.std()
+
+        print(f"\n  📊 Рек. пороги {ticker_a}/{ticker_b}  ({tf}, MOEX 10-23, {len(merged):,} св.)")
+        print(f"     Спред скальп ≥   {p75:>7.2f} ₽   (P75 положит. спреда)")
+        print(f"     Спред хороший ≥  {p90:>7.2f} ₽   (P90)")
+        print(f"     Макс. спред вх.  {p95:>7.2f} ₽   (P95 — не входить выше)")
+        print(f"     Тейк (сх-ние)    {max(abs(mean_sp)*0.5, 0.05):>7.2f} ₽   (½·|mean|, мин 0.05)")
+        print(f"     Стоп (доп.)      {2*std_sp:>7.2f} ₽   (2·std)")
+        print(f"     Ratio скальп ≥   {ratio.quantile(0.75):.4f}")
+        print(f"     Ratio хороший ≥  {ratio.quantile(0.90):.4f}")
+        print(f"     Spread mean={mean_sp:.2f}  std={std_sp:.2f}  "
+              f"min={spread.min():.2f}  max={spread.max():.2f}")
+    except Exception as e:
+        print(f"  ⚠ Ошибка расчёта порогов {ticker_a}/{ticker_b}: {e}")
+
+
 def download_all() -> None:
     if not TINKOFF_TOKEN:
         print("❌ TINKOFF_TOKEN не найден в .env")
@@ -141,8 +253,7 @@ def download_all() -> None:
         input("\nНажми Enter для выхода...")
         sys.exit(1)
 
-    to_dt   = datetime.now()
-    from_dt = to_dt - timedelta(days=30 * MONTHS_BACK)
+    from_dt, to_dt = _parse_args()
 
     print("=" * 65)
     print("  MATS History Downloader")
@@ -203,6 +314,12 @@ def download_all() -> None:
                 df_res.to_csv(out, index=False)
                 kb = out.stat().st_size // 1024
                 print(f"  ✅ {ticker} {label}: {len(df_res):,} свечей → {out.name} ({kb} КБ)")
+
+    # ── Шаг 3: пороги для каждой пары ───────────────────────────────────────
+    print("\n📐 Шаг 3: рекомендуемые пороги (MOEX-часы, 1-мин данные)")
+    for ta, tb in PAIRS:
+        if ta in INSTRUMENTS and tb in INSTRUMENTS:
+            print_pair_thresholds(ta, tb, tf="1min")
 
     # ── Итог ─────────────────────────────────────────────────────────────────
     print("\n" + "=" * 65)
