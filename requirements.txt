@@ -19,6 +19,11 @@ asyncio-throttle>=1.0.2
 # Мониторинг и уведомления
 # python-telegram-bot>=20.0    # Telegram-уведомления (раскомментировать)
 
+# LLM-аналитик (бэктестер)
+anthropic>=0.40.0              # Claude API
+openai>=1.50.0                 # GPT-4o API
+# requests уже подключён выше (нужен для Ollama)
+
 # Утилиты
 python-dotenv>=1.0.0
 rich>=13.0.0                   # Красивый вывод в консоль
