@@ -31,12 +31,23 @@ FIGI = {
     "SBERP": "BBG0047315Y7",
     "TGLD":  "TCS80A101X50",
     "AKGD":  "BBG014M8NBM4",
+    "RTKM":  "BBG004S682Z6",
+    "RTKMP": "BBG004S685M3",
+    "MTLR":  "BBG004S68598",
+    "MTLRP": "BBG004S68FR6",
+    "SBGD":  "BBG019HZM0H0",
+    "SNGS":  "BBG0047315D0",
+    "SNGSP": "BBG004S681M2",
 }
 
 KNOWN_PAIRS: dict[str, tuple[str, str]] = {
-    "TATN / TATNP  (Татнефть)": ("TATN",  "TATNP"),
-    "SBER / SBERP  (Сбербанк)": ("SBER",  "SBERP"),
-    "TGLD / AKGD   (Золото ETF)": ("TGLD", "AKGD"),
+    "TATN / TATNP  (Татнефть)":   ("TATN",  "TATNP"),
+    "SBER / SBERP  (Сбербанк)":   ("SBER",  "SBERP"),
+    "TGLD / AKGD   (Золото ETF)": ("TGLD",  "AKGD"),
+    "RTKM / RTKMP  (Ростелеком)": ("RTKM",  "RTKMP"),
+    "MTLR / MTLRP  (Мечел)":      ("MTLR",  "MTLRP"),
+    "TGLD / SBGD   (Золото ETF)": ("TGLD",  "SBGD"),
+    "SNGS / SNGSP  (Сургут)":     ("SNGS",  "SNGSP"),
 }
 _TINVEST_BASE = "https://invest-public-api.tinkoff.ru/rest"
 _TF_MAP = {
@@ -505,7 +516,9 @@ if load_btn:
         _lots_a_per_b = 1
         df_merged["spread"] = df_merged["close_a"] - df_merged["close_b"]
 
-    df_merged["ratio_h"] = df_merged["close_a"] / df_merged["close_b"]
+    # Нормализуем через hedge: для пар с hedge>1 (TGLD/AKGD) даёт значение ~1.0
+    # вместо ~0.055, иначе ratio-слайдеры (min=0.990) не работали бы
+    df_merged["ratio_h"] = df_merged["close_a"] * _hedge / df_merged["close_b"]
 
     st.session_state["df"]           = df_merged
     st.session_state["date_from"]    = str(date_from)
@@ -543,11 +556,11 @@ with tab_bt:
     col1, col2 = st.columns(2)
     with col1:
         entry_scalp     = st.slider("Спред скальп ≥, ₽",      0.05, 50.0,  8.0, 0.05)
-        ratio_scalp     = st.slider("Ratio скальп ≥",         1.000, 1.020, 1.010, 0.0001, format="%.4f")
+        ratio_scalp     = st.slider("Ratio скальп ≥",         0.990, 1.020, 1.010, 0.0001, format="%.4f")
         stop_add        = st.slider("Стоп: доп. к спреду ₽",  0.05, 30.0,  5.0, 0.05)
     with col2:
         entry_good      = st.slider("Спред хороший ≥, ₽",     0.05, 60.0, 10.0, 0.05)
-        ratio_good      = st.slider("Ratio хороший ≥",        1.000, 1.025, 1.013, 0.0001, format="%.4f")
+        ratio_good      = st.slider("Ratio хороший ≥",        0.990, 1.025, 1.013, 0.0001, format="%.4f")
         target          = st.slider("Тейк: спред схождения ₽", 0.0, 20.0,  1.0, 0.05)
     max_entry_spread = st.slider(
         "⛔ Макс. спред входа ₽ (выше — не входить)",

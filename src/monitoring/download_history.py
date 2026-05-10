@@ -37,26 +37,29 @@ INSTRUMENTS: dict[str, str] = {
     # Раскомментировать только для загрузки 2024 данных вручную.
     # "TATN":  "BBG004RVFFC0",   # Татнефть обыкновенная
     # "TATNP": "BBG004S68829",   # Татнефть привилегированная
-    # ── Золото ───────────────────────────────────────────────────────────
-    "TGLD":  "TCS80A101X50",   # Т-Капитал Золото (ETF)
-    "AKGD":  "BBG014M8NBM4",   # Альфа-Капитал Золото (ETF)
+    # ── Золото (hedge ratio дробный — стратегия не подходит) ─────────────
+    # "TGLD":  "TCS80A101X50",   # Т-Капитал Золото (ETF)
+    # "AKGD":  "BBG014M8NBM4",   # Альфа-Капитал Золото (ETF)
     # ── Сбербанк ─────────────────────────────────────────────────────────
     "SBER":  "BBG004730N88",   # Сбербанк обыкновенная
     "SBERP": "BBG0047315Y7",   # Сбербанк привилегированная
-    # ── Кандидаты (раскомментировать для проверки) ───────────────────────
-    # "SBGD":  "BBG019HZM0H0",   # Первая — Доступное Золото (ETF)
-    # "SNGS":  "BBG004S681W1",   # Сургутнефтегаз обыкновенная
-    # "SNGSP": "BBG004S68614",   # Сургутнефтегаз привилегированная
-    # "MTLR":  "BBG004S68473",   # Мечел обыкновенная
-    # "MTLRP": "BBG004S682Z6",   # Мечел привилегированная
-    # "RTKM":  "BBG004S682Z6",   # Ростелеком обыкновенная
-    # "RTKMP": "BBG004RVYMS2",   # Ростелеком привилегированная
+    # ── Кандидаты проверены, не подошли (раскомментировать для повтора) ──
+    # "TGLD":  "TCS80A101X50",   # Золото ETF  (std=0.30₽, комиссия убивает)
+    # "SBGD":  "BBG019HZM0H0",   # Золото ETF  (hedge=2, спред < комиссии)
+    # "SNGS":  "BBG0047315D0",   # Сургут обычная  (тренд/кубышка)
+    # "SNGSP": "BBG004S681M2",   # Сургут привил   (тренд/кубышка)
+    # "RTKM":  "BBG004S682Z6",   # Ростелеком обычная  (тренд 3 мес.)
+    # "RTKMP": "BBG004S685M3",   # Ростелеком привил   (тренд 3 мес.)
+    # "MTLR":  "BBG004S68598",   # Мечел обычная       (новостной)
+    # "MTLRP": "BBG004S68FR6",   # Мечел привил        (новостной)
+    # "LSNG":  "BBG000NLC9Z6",   # Ленэнерго обычная   (hedge ~21)
+    # "LSNGP": "BBG000NLCCM3",   # Ленэнерго привил    (hedge ~21)
+    # "BSPB":  "BBG000QJW156",   # Банк СПб обычная    (hedge ~7)
+    # "BSPBP": "BBG00Z197548",   # Банк СПб привил     (hedge ~7)
 }
 
 # ─── Пары для анализа порогов ─────────────────────────────────────────────────
 PAIRS: list[tuple[str, str]] = [
-    ("TATN",  "TATNP"),
-    ("TGLD",  "AKGD"),
     ("SBER",  "SBERP"),
 ]
 
@@ -250,7 +253,8 @@ def download_all() -> None:
     if not TINKOFF_TOKEN:
         print("❌ TINKOFF_TOKEN не найден в .env")
         print("   Добавь строку: TINKOFF_TOKEN=t.твой_токен")
-        input("\nНажми Enter для выхода...")
+        if sys.stdin.isatty():
+            input("\nНажми Enter для выхода...")
         sys.exit(1)
 
     from_dt, to_dt = _parse_args()
@@ -288,6 +292,10 @@ def download_all() -> None:
                 continue
 
             df = df.drop_duplicates("begin").sort_values("begin").reset_index(drop=True)
+            # Объединяем с существующими данными (не перезаписываем)
+            if out.exists():
+                existing = pd.read_csv(out, parse_dates=["begin"])
+                df = pd.concat([existing, df]).drop_duplicates("begin").sort_values("begin").reset_index(drop=True)
             df.to_csv(out, index=False)
             kb = out.stat().st_size // 1024
             print(f"✅ {len(df):,} свечей → {out.name} ({kb} КБ)")
@@ -311,6 +319,10 @@ def download_all() -> None:
 
                 out = HISTORY_DIR / f"{ticker}_{label}.csv"
                 df_res = resample_candles(buf_5min[ticker], minutes)
+                # Объединяем с существующими данными
+                if out.exists():
+                    existing = pd.read_csv(out, parse_dates=["begin"])
+                    df_res = pd.concat([existing, df_res]).drop_duplicates("begin").sort_values("begin").reset_index(drop=True)
                 df_res.to_csv(out, index=False)
                 kb = out.stat().st_size // 1024
                 print(f"  ✅ {ticker} {label}: {len(df_res):,} свечей → {out.name} ({kb} КБ)")
@@ -334,7 +346,10 @@ def download_all() -> None:
         print(f"  ⚠ Завершено с {errors} ошибками (проверь TINKOFF_TOKEN).")
     print(f"\n  Путь: {HISTORY_DIR}")
     print("=" * 65)
-    input("\nНажми Enter для выхода...")
+    try:
+        input("\nНажми Enter для выхода...")
+    except EOFError:
+        pass
 
 
 if __name__ == "__main__":
