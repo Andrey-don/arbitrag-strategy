@@ -1,9 +1,11 @@
 """
 MATS History Downloader — загрузка исторических данных с T-Invest API.
-Сохраняет CSV-файлы в data/history/ для офлайн-тестирования в бэктестере.
 
-Запуск:  python src/monitoring/download_history.py
-Или:     двойной клик на download_history.bat
+Скачивает: 1-мин и 5-мин (напрямую с API)
+Генерирует: 15-мин и 1-час (пересемплирование из 5-мин, без лишних запросов)
+
+Запуск: python src/monitoring/download_history.py
+Или:    двойной клик на download_history.bat
 """
 
 import os
@@ -26,22 +28,32 @@ TINKOFF_TOKEN = os.getenv("TINKOFF_TOKEN", "")
 _BASE = "https://invest-public-api.tinkoff.ru/rest"
 
 # ─── Инструменты ─────────────────────────────────────────────────────────────
-# Чтобы добавить новый инструмент — найди FIGI через T-Invest API (FindInstrument)
-# или на сайте https://www.tinkoff.ru/invest/ в URL тикера.
+# Добавить новый инструмент: найди FIGI через T-Invest API (FindInstrument)
+# или на https://www.tinkoff.ru/invest/ → страница инструмента → URL.
 INSTRUMENTS: dict[str, str] = {
     "TATN":  "BBG004RVFFC0",   # Татнефть обыкновенная
     "TATNP": "BBG004S68829",   # Татнефть привилегированная
-    # ── Добавляй новые пары сюда ──────────────────────────────────────────
+    # ── Другие пары — раскомментируй и добавь FIGI ───────────────────────
     # "SBER":  "BBG004730N88",   # Сбербанк обыкновенная
     # "SBERP": "BBG0047315Y7",   # Сбербанк привилегированная
     # "GAZP":  "BBG004730RP0",   # Газпром
     # "LKOH":  "BBG004731032",   # Лукойл
-    # "GOLD":  "<FIGI>",         # Золото — уточни FIGI через FindInstrument
+    # "GOLD":  "<FIGI>",         # Золото (уточни FIGI через FindInstrument)
 }
 
 # ─── Параметры загрузки ───────────────────────────────────────────────────────
 MONTHS_BACK = 3        # глубина истории в месяцах
-TIMEFRAMES  = [5, 60]  # таймфреймы в минутах: 5-мин и 1-час
+
+# Таймфреймы, скачиваемые с API.
+# 15-мин и 1-час НЕ качаем — они генерируются из 5-мин автоматически.
+# Нельзя получить 1-мин из 5-мин: только скачать отдельно (≈90 запросов за 3 мес.)
+DOWNLOAD_TF = [1, 5]
+
+# Таймфреймы, получаемые пересемплированием из 5-мин данных (бесплатно)
+RESAMPLE_FROM_5MIN = {
+    "15min": 15,   # каждые 3 свечи 5-мин = 1 свеча 15-мин
+    "1h":    60,   # каждые 12 свечей 5-мин = 1 свеча 1-час
+}
 
 # ─── T-Invest API ─────────────────────────────────────────────────────────────
 _TF_MAP: dict[int, str] = {
@@ -51,7 +63,7 @@ _TF_MAP: dict[int, str] = {
     15: "CANDLE_INTERVAL_15_MIN",
     60: "CANDLE_INTERVAL_HOUR",
 }
-# Максимальный размер чанка на один запрос (ограничение T-Invest API)
+# Максимальный размер одного запроса к API (иначе пустой ответ)
 _TF_CHUNK: dict[int, int] = {1: 1, 5: 1, 10: 1, 15: 1, 60: 7}
 
 
@@ -64,6 +76,7 @@ def _q2f(q: dict) -> float:
 
 
 def fetch_candles(figi: str, from_dt: datetime, to_dt: datetime, interval: int) -> pd.DataFrame:
+    """Загрузить свечи с T-Invest API с автоматическим чанкованием."""
     chunk = timedelta(days=_TF_CHUNK.get(interval, 1))
     rows: list[dict] = []
     cur = from_dt.replace(tzinfo=timezone.utc) if from_dt.tzinfo is None else from_dt
@@ -89,65 +102,114 @@ def fetch_candles(figi: str, from_dt: datetime, to_dt: datetime, interval: int) 
                     ts = pd.to_datetime(c["time"]) + timedelta(hours=3)
                     rows.append({"begin": ts.replace(tzinfo=None), "close": close})
         except Exception as e:
-            print(f"    ⚠ Ошибка запроса ({cur.date()}): {e}")
+            print(f"    ⚠ Ошибка ({cur.date()}): {e}")
         cur = cur_to
-        time.sleep(0.05)  # небольшая пауза, чтобы не перегружать API
+        time.sleep(0.05)
 
     return pd.DataFrame(rows) if rows else pd.DataFrame()
 
 
+def resample_candles(df: pd.DataFrame, minutes: int) -> pd.DataFrame:
+    """Пересемплировать 5-мин свечи в старший таймфрейм по цене закрытия."""
+    df = df.copy()
+    df["begin"] = pd.to_datetime(df["begin"])
+    resampled = (
+        df.set_index("begin")["close"]
+        .resample(f"{minutes}min")
+        .last()
+        .dropna()
+        .reset_index()
+    )
+    return resampled
+
+
 def tf_label(tf: int) -> str:
-    """Метка таймфрейма для имени файла: 5 → '5min', 60 → '1h'."""
     return f"{tf}min" if tf < 60 else "1h"
 
 
 def download_all() -> None:
     if not TINKOFF_TOKEN:
         print("❌ TINKOFF_TOKEN не найден в .env")
-        print("   Добавь строку: TINKOFF_TOKEN=<твой_токен>")
-        input("Нажми Enter для выхода...")
+        print("   Добавь строку: TINKOFF_TOKEN=t.твой_токен")
+        input("\nНажми Enter для выхода...")
         sys.exit(1)
 
     to_dt   = datetime.now()
     from_dt = to_dt - timedelta(days=30 * MONTHS_BACK)
 
-    print("=" * 60)
+    print("=" * 65)
     print("  MATS History Downloader")
-    print("=" * 60)
-    print(f"  Период:       {from_dt.date()} — {to_dt.date()} ({MONTHS_BACK} мес.)")
-    print(f"  Инструменты:  {', '.join(INSTRUMENTS)}")
-    print(f"  Таймфреймы:   {', '.join(str(t) + ' мин' for t in TIMEFRAMES)}")
-    print(f"  Сохранение:   {HISTORY_DIR}")
-    print("=" * 60)
+    print("=" * 65)
+    print(f"  Период:      {from_dt.date()} — {to_dt.date()} ({MONTHS_BACK} мес.)")
+    print(f"  Инструменты: {', '.join(INSTRUMENTS)}")
+    print(f"  Скачиваем:   {', '.join(tf_label(t) for t in DOWNLOAD_TF)}")
+    print(f"  Генерируем:  {', '.join(RESAMPLE_FROM_5MIN)} (из 5-мин)")
+    print(f"  Папка:       {HISTORY_DIR}")
+    print("=" * 65)
 
-    total = len(INSTRUMENTS) * len(TIMEFRAMES)
-    done  = 0
+    total  = len(INSTRUMENTS) * len(DOWNLOAD_TF)
+    done   = 0
     errors = 0
+    # Буфер 5-мин данных для генерации производных таймфреймов
+    buf_5min: dict[str, pd.DataFrame] = {}
 
+    # ── Шаг 1: скачать с API ─────────────────────────────────────────────────
+    print("\n📡 Шаг 1: загрузка с T-Invest API")
     for ticker, figi in INSTRUMENTS.items():
-        for tf in TIMEFRAMES:
+        for tf in DOWNLOAD_TF:
             done += 1
             label  = tf_label(tf)
             out    = HISTORY_DIR / f"{ticker}_{label}.csv"
-            chunks = (MONTHS_BACK * 30) // _TF_CHUNK.get(tf, 1)
-            print(f"\n  [{done}/{total}] {ticker} {label} (~{chunks} запросов)...", end=" ", flush=True)
+            n_req  = (MONTHS_BACK * 30) // _TF_CHUNK.get(tf, 1)
+            print(f"  [{done}/{total}] {ticker} {label} (~{n_req} запросов)...", end=" ", flush=True)
+
             df = fetch_candles(figi, from_dt, to_dt, tf)
             if df.empty:
                 print("⚠ нет данных")
                 errors += 1
                 continue
+
             df = df.drop_duplicates("begin").sort_values("begin").reset_index(drop=True)
             df.to_csv(out, index=False)
-            size_kb = out.stat().st_size // 1024
-            print(f"✅ {len(df):,} свечей → {out.name} ({size_kb} КБ)")
+            kb = out.stat().st_size // 1024
+            print(f"✅ {len(df):,} свечей → {out.name} ({kb} КБ)")
 
-    print("\n" + "=" * 60)
+            if tf == 5:
+                buf_5min[ticker] = df  # сохраняем для пересемплирования
+
+    # ── Шаг 2: генерация производных таймфреймов из 5-мин ───────────────────
+    if buf_5min:
+        print("\n🔄 Шаг 2: генерация из 5-мин данных")
+        for label, minutes in RESAMPLE_FROM_5MIN.items():
+            for ticker in INSTRUMENTS:
+                if ticker not in buf_5min:
+                    # 5-мин не загрузили — читаем из файла если есть
+                    f5 = HISTORY_DIR / f"{ticker}_5min.csv"
+                    if f5.exists():
+                        buf_5min[ticker] = pd.read_csv(f5, parse_dates=["begin"])
+                    else:
+                        print(f"  ⚠ {ticker}_{label}: нет 5-мин данных, пропуск")
+                        continue
+
+                out = HISTORY_DIR / f"{ticker}_{label}.csv"
+                df_res = resample_candles(buf_5min[ticker], minutes)
+                df_res.to_csv(out, index=False)
+                kb = out.stat().st_size // 1024
+                print(f"  ✅ {ticker} {label}: {len(df_res):,} свечей → {out.name} ({kb} КБ)")
+
+    # ── Итог ─────────────────────────────────────────────────────────────────
+    print("\n" + "=" * 65)
+    all_files = sorted(HISTORY_DIR.glob("*.csv"))
+    print(f"  Файлов в data/history/: {len(all_files)}")
+    for f in all_files:
+        print(f"    {f.name}  ({f.stat().st_size // 1024} КБ)")
+    print()
     if errors == 0:
-        print("  ✅ Все файлы загружены успешно!")
+        print("  ✅ Все файлы загружены и сгенерированы!")
     else:
-        print(f"  ⚠ Завершено с {errors} ошибками.")
-    print(f"  Папка: {HISTORY_DIR}")
-    print("=" * 60)
+        print(f"  ⚠ Завершено с {errors} ошибками (проверь TINKOFF_TOKEN).")
+    print(f"\n  Путь: {HISTORY_DIR}")
+    print("=" * 65)
     input("\nНажми Enter для выхода...")
 
 

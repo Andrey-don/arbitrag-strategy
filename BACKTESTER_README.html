@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MATS Backtester — Инструкция</title>
+<style>
+  :root {
+    --bg:      #0e1117;
+    --surface: #1a1f2e;
+    --card:    #212838;
+    --border:  #2d3748;
+    --text:    #e2e8f0;
+    --muted:   #8899aa;
+    --green:   #4caf50;
+    --green2:  #1a3a1a;
+    --yellow:  #f6c90e;
+    --yellow2: #2a2200;
+    --red:     #f85149;
+    --red2:    #2a1010;
+    --blue:    #58a6ff;
+    --blue2:   #0d1f3c;
+    --purple:  #b794f4;
+    --code-bg: #161b22;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 15px;
+    line-height: 1.7;
+    display: flex;
+  }
+
+  /* ── Навигация ────────────────────────────────────────────────────────── */
+  nav {
+    position: fixed;
+    top: 0; left: 0;
+    width: 240px;
+    height: 100vh;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 24px 0 40px;
+    z-index: 100;
+  }
+  nav .logo {
+    padding: 0 20px 20px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 16px;
+  }
+  nav .logo span {
+    display: block;
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+  }
+  nav .logo strong {
+    font-size: 16px;
+    color: var(--green);
+  }
+  nav ul { list-style: none; }
+  nav ul li a {
+    display: block;
+    padding: 7px 20px;
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 13px;
+    border-left: 2px solid transparent;
+    transition: all 0.15s;
+  }
+  nav ul li a:hover {
+    color: var(--text);
+    background: rgba(255,255,255,0.04);
+    border-left-color: var(--green);
+  }
+  nav ul li.section-head a {
+    color: var(--text);
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin-top: 12px;
+    pointer-events: none;
+    cursor: default;
+    padding-bottom: 3px;
+  }
+
+  /* ── Контент ─────────────────────────────────────────────────────────── */
+  main {
+    margin-left: 240px;
+    max-width: 860px;
+    padding: 48px 48px 80px;
+    width: 100%;
+  }
+
+  /* ── Заголовок страницы ─────────────────────────────────────────────── */
+  .page-header {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 28px;
+    margin-bottom: 40px;
+  }
+  .page-header .badge {
+    display: inline-block;
+    background: var(--green2);
+    color: var(--green);
+    border: 1px solid var(--green);
+    border-radius: 4px;
+    font-size: 11px;
+    padding: 2px 8px;
+    margin-bottom: 12px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+  .page-header h1 {
+    font-size: 32px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .page-header p { color: var(--muted); font-size: 16px; }
+
+  /* ── Секции ─────────────────────────────────────────────────────────── */
+  section {
+    margin-bottom: 52px;
+    scroll-margin-top: 24px;
+  }
+  h2 {
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+  }
+  h2 .icon { margin-right: 8px; }
+  h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 24px 0 12px;
+    color: var(--blue);
+  }
+  p { margin-bottom: 12px; color: var(--text); }
+
+  /* ── Папки / файловая структура ─────────────────────────────────────── */
+  .file-tree {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px 24px;
+    font-family: 'Consolas', 'SF Mono', monospace;
+    font-size: 13px;
+    line-height: 1.9;
+    overflow-x: auto;
+  }
+  .file-tree .dir   { color: var(--blue); }
+  .file-tree .file  { color: var(--text); }
+  .file-tree .bat   { color: var(--green); font-weight: 600; }
+  .file-tree .comment { color: var(--muted); }
+  .file-tree .csv   { color: var(--yellow); }
+
+  /* ── Карточки ярлыков ───────────────────────────────────────────────── */
+  .shortcuts {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 12px;
+    margin: 16px 0 24px;
+  }
+  .shortcut-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    text-align: center;
+  }
+  .shortcut-card .icon { font-size: 28px; display: block; margin-bottom: 8px; }
+  .shortcut-card .name { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+  .shortcut-card .desc { color: var(--muted); font-size: 12px; }
+  .shortcut-card.green { border-color: var(--green); background: var(--green2); }
+  .shortcut-card.blue  { border-color: var(--blue);  background: var(--blue2);  }
+  .shortcut-card.yellow{ border-color: var(--yellow); background: var(--yellow2); }
+
+  /* ── Инфо-блоки ─────────────────────────────────────────────────────── */
+  .callout {
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin: 16px 0;
+    border-left: 3px solid;
+    font-size: 14px;
+  }
+  .callout.tip    { background: var(--green2);  border-color: var(--green);  }
+  .callout.warn   { background: var(--yellow2); border-color: var(--yellow); }
+  .callout.info   { background: var(--blue2);   border-color: var(--blue);   }
+  .callout.danger { background: var(--red2);    border-color: var(--red);    }
+  .callout strong { display: block; margin-bottom: 4px; }
+
+  /* ── Таблицы ─────────────────────────────────────────────────────────── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 14px;
+  }
+  th {
+    background: var(--card);
+    color: var(--muted);
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border);
+  }
+  td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.03); }
+  td code, th code {
+    background: var(--code-bg);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 12px;
+  }
+
+  /* ── Код ─────────────────────────────────────────────────────────────── */
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    overflow-x: auto;
+    margin: 12px 0 20px;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  code {
+    font-family: 'Consolas', 'SF Mono', monospace;
+    color: var(--purple);
+    font-size: 13px;
+  }
+  pre code { color: var(--text); }
+  pre .kw  { color: #ff7b72; }
+  pre .str { color: var(--green); }
+  pre .cm  { color: var(--muted); font-style: italic; }
+  pre .num { color: var(--yellow); }
+
+  /* ── Сигнальная таблица ─────────────────────────────────────────────── */
+  .signal { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .dot.green  { background: var(--green); }
+  .dot.yellow { background: var(--yellow); }
+  .dot.red    { background: var(--red); }
+  .dot.grey   { background: var(--muted); }
+
+  /* ── Вкладки-карточки ───────────────────────────────────────────────── */
+  .tab-cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin: 20px 0 28px;
+  }
+  .tab-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px;
+  }
+  .tab-card .tab-icon { font-size: 22px; margin-bottom: 8px; }
+  .tab-card .tab-name { font-weight: 700; font-size: 15px; margin-bottom: 6px; }
+  .tab-card .tab-desc { color: var(--muted); font-size: 13px; }
+
+  /* ── TF-сравнение ───────────────────────────────────────────────────── */
+  .tf-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin: 16px 0;
+  }
+  .tf-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    text-align: center;
+  }
+  .tf-card .tf-name { font-size: 20px; font-weight: 700; color: var(--blue); }
+  .tf-card .tf-how  { font-size: 11px; color: var(--muted); margin: 4px 0 6px; }
+  .tf-card .tf-use  { font-size: 12px; }
+  .tf-card.download { border-color: var(--green); }
+  .tf-card.resample { border-color: var(--purple); }
+
+  /* ── Путь проекта ───────────────────────────────────────────────────── */
+  .path-box {
+    background: var(--card);
+    border: 1px solid var(--green);
+    border-radius: 8px;
+    padding: 16px 20px;
+    font-family: monospace;
+    font-size: 14px;
+    color: var(--green);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 16px 0;
+    word-break: break-all;
+  }
+  .path-box .path-icon { font-size: 20px; flex-shrink: 0; }
+
+  /* ── FAQ ─────────────────────────────────────────────────────────────── */
+  details {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 10px;
+    overflow: hidden;
+  }
+  summary {
+    padding: 14px 18px;
+    font-weight: 600;
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    user-select: none;
+  }
+  summary::-webkit-details-marker { display: none; }
+  summary::before {
+    content: '▶';
+    font-size: 10px;
+    color: var(--muted);
+    transition: transform 0.2s;
+  }
+  details[open] summary::before { transform: rotate(90deg); }
+  details[open] summary { border-bottom: 1px solid var(--border); }
+  .faq-body {
+    padding: 16px 18px;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.7;
+  }
+  .faq-body p { color: var(--muted); margin-bottom: 8px; }
+  .faq-body code { color: var(--purple); }
+
+  /* ── Шаги ────────────────────────────────────────────────────────────── */
+  .steps { counter-reset: step; margin: 16px 0; }
+  .step {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 20px;
+    align-items: flex-start;
+  }
+  .step-num {
+    counter-increment: step;
+    flex-shrink: 0;
+    width: 32px; height: 32px;
+    background: var(--green);
+    color: #000;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+  }
+  .step-body { flex: 1; padding-top: 4px; }
+  .step-body strong { display: block; margin-bottom: 4px; }
+
+  /* ── Footer ─────────────────────────────────────────────────────────── */
+  footer {
+    margin-top: 60px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 13px;
+    text-align: center;
+  }
+
+  @media (max-width: 900px) {
+    nav { display: none; }
+    main { margin-left: 0; padding: 24px; }
+    .tab-cards { grid-template-columns: 1fr; }
+    .tf-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Навигация ─────────────────────────────────────────────────────────── -->
+<nav>
+  <div class="logo">
+    <span>MOEX Arbitrage</span>
+    <strong>📊 MATS Backtester</strong>
+  </div>
+  <ul>
+    <li class="section-head"><a>Начало</a></li>
+    <li><a href="#location">📁 Где всё находится</a></li>
+    <li><a href="#setup">⚙️ Настройка токена</a></li>
+    <li class="section-head"><a>Данные</a></li>
+    <li><a href="#timeframes">🕐 Таймфреймы</a></li>
+    <li><a href="#download">📥 Загрузка истории</a></li>
+    <li><a href="#instruments">➕ Добавить инструмент</a></li>
+    <li class="section-head"><a>Использование</a></li>
+    <li><a href="#launch">🚀 Запуск</a></li>
+    <li><a href="#sidebar">⚙️ Параметры (сайдбар)</a></li>
+    <li><a href="#tab-bt">📊 Вкладка Бэктест</a></li>
+    <li><a href="#tab-opt">🔍 Вкладка Оптимизатор</a></li>
+    <li><a href="#tab-sim">🎮 Вкладка Тренажёр</a></li>
+    <li class="section-head"><a>Стратегия</a></li>
+    <li><a href="#signals">📡 Сигналы входа</a></li>
+    <li><a href="#tips">💡 Советы</a></li>
+    <li><a href="#faq">❓ FAQ</a></li>
+  </ul>
+</nav>
+
+<!-- ── Контент ───────────────────────────────────────────────────────────── -->
+<main>
+
+  <!-- Заголовок -->
+  <div class="page-header">
+    <div class="badge">v3 · MATS</div>
+    <h1>📊 MATS Backtester</h1>
+    <p>Полная инструкция по тестированию арбитражной стратегии ТАТок (TATN / TATNP) на исторических данных MOEX.</p>
+  </div>
+
+  <!-- ── Где всё находится ─────────────────────────────────────────────── -->
+  <section id="location">
+    <h2><span class="icon">📁</span>Где находится всё необходимое</h2>
+
+    <div class="path-box">
+      <span class="path-icon">📂</span>
+      C:\Users\profi\Documents\Project\arbitrag-strategy\
+    </div>
+
+    <p>Все инструменты в одной папке — ничего искать по компьютеру не нужно.</p>
+
+    <div class="shortcuts">
+      <div class="shortcut-card green">
+        <span class="icon">📊</span>
+        <div class="name">MATS Backtester</div>
+        <div class="desc">Запуск бэктестера<br>localhost:8502</div>
+      </div>
+      <div class="shortcut-card green">
+        <span class="icon">📈</span>
+        <div class="name">MATS Dashboard</div>
+        <div class="desc">Живой торговый дашборд<br>localhost:8501</div>
+      </div>
+      <div class="shortcut-card yellow">
+        <span class="icon">📥</span>
+        <div class="name">MATS Загрузка истории</div>
+        <div class="desc">Скачать CSV для офлайн-теста</div>
+      </div>
+    </div>
+
+    <div class="file-tree">
+<span class="dir">arbitrag-strategy\</span><br>
+│<br>
+├── <span class="bat">start_backtester.bat</span>     <span class="comment">← 🟢 ЗАПУСК бэктестера (двойной клик)</span><br>
+├── <span class="bat">start_dashboard.bat</span>       <span class="comment">← 🟢 ЗАПУСК дашборда</span><br>
+├── <span class="bat">download_history.bat</span>      <span class="comment">← 📥 ЗАГРУЗКА истории (двойной клик)</span><br>
+├── <span class="file">BACKTESTER_README.html</span>   <span class="comment">← 📖 Эта инструкция</span><br>
+│<br>
+├── <span class="dir">data\history\</span>             <span class="comment">← CSV-файлы с историей</span><br>
+│   ├── <span class="csv">TATN_1min.csv</span>         <span class="comment">  загружается с API</span><br>
+│   ├── <span class="csv">TATNP_1min.csv</span><br>
+│   ├── <span class="csv">TATN_5min.csv</span>         <span class="comment">  загружается с API</span><br>
+│   ├── <span class="csv">TATNP_5min.csv</span><br>
+│   ├── <span class="csv">TATN_15min.csv</span>        <span class="comment">  генерируется из 5-мин</span><br>
+│   ├── <span class="csv">TATNP_15min.csv</span><br>
+│   ├── <span class="csv">TATN_1h.csv</span>           <span class="comment">  генерируется из 5-мин</span><br>
+│   └── <span class="csv">TATNP_1h.csv</span><br>
+│<br>
+├── <span class="dir">src\monitoring\</span><br>
+│   ├── <span class="file">backtest.py</span>          <span class="comment">  код бэктестера</span><br>
+│   ├── <span class="file">dashboard.py</span>         <span class="comment">  код живого дашборда</span><br>
+│   └── <span class="file">download_history.py</span>  <span class="comment">  код загрузчика истории</span><br>
+│<br>
+└── <span class="file">.env</span>                     <span class="comment">  TINKOFF_TOKEN (не в git)</span>
+    </div>
+  </section>
+
+  <!-- ── Настройка ─────────────────────────────────────────────────────── -->
+  <section id="setup">
+    <h2><span class="icon">⚙️</span>Настройка — одноразово</h2>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <strong>Получи токен T-Invest (Read-only)</strong>
+          Зайди на tinkoff.ru/invest → Настройки → API → Создать токен.<br>
+          Торговые права не нужны — выбирай <strong>Read-only</strong>.
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <strong>Открой файл <code>.env</code> в папке проекта</strong>
+          <pre><code>TINKOFF_TOKEN=t.твой_токен_здесь</code></pre>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <strong>Сохрани файл</strong> — больше этот шаг не повторяется.
+        </div>
+      </div>
+    </div>
+
+    <div class="callout tip">
+      <strong>✅ Токен нужен только для загрузки данных.</strong>
+      После того как CSV-файлы скачаны — интернет и токен больше не нужны.
+      Бэктестер работает полностью офлайн.
+    </div>
+  </section>
+
+  <!-- ── Таймфреймы ────────────────────────────────────────────────────── -->
+  <section id="timeframes">
+    <h2><span class="icon">🕐</span>Таймфреймы — откуда берутся</h2>
+
+    <p>Загрузчик получает с API только <strong>1-мин и 5-мин</strong>, остальные генерирует сам:</p>
+
+    <div class="tf-grid">
+      <div class="tf-card download">
+        <div class="tf-name">1 мин</div>
+        <div class="tf-how">📡 Скачивается с API</div>
+        <div class="tf-use">Скальпинг, точный анализ</div>
+      </div>
+      <div class="tf-card download">
+        <div class="tf-name">5 мин</div>
+        <div class="tf-how">📡 Скачивается с API</div>
+        <div class="tf-use">Основной рабочий ТФ</div>
+      </div>
+      <div class="tf-card resample">
+        <div class="tf-name">15 мин</div>
+        <div class="tf-how">🔄 Из 5-мин (×3)</div>
+        <div class="tf-use">ТФ из курса, среднесрочка</div>
+      </div>
+      <div class="tf-card resample">
+        <div class="tf-name">1 час</div>
+        <div class="tf-how">🔄 Из 5-мин (×12)</div>
+        <div class="tf-use">Глобальная картина</div>
+      </div>
+    </div>
+
+    <div class="callout info">
+      <strong>ℹ️ Почему не качаем 15-мин напрямую?</strong>
+      Пересемплирование из 5-мин даёт тот же результат, но вдвое меньше API-запросов.
+      1-мин нельзя вычислить из 5-мин — только скачать отдельно.
+    </div>
+
+    <table>
+      <thead>
+        <tr><th>Таймфрейм</th><th>Запросов на 3 мес.</th><th>Время загрузки</th><th>Размер CSV</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>1 мин</td><td>~90 (1 день/запрос)</td><td>~2–3 мин</td><td>~2–4 МБ</td></tr>
+        <tr><td>5 мин</td><td>~90 (1 день/запрос)</td><td>~2–3 мин</td><td>~400–700 КБ</td></tr>
+        <tr><td>15 мин</td><td>0 (из 5-мин)</td><td>секунда</td><td>~150 КБ</td></tr>
+        <tr><td>1 час</td><td>0 (из 5-мин)</td><td>секунда</td><td>~40 КБ</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ── Загрузка истории ──────────────────────────────────────────────── -->
+  <section id="download">
+    <h2><span class="icon">📥</span>Загрузка истории</h2>
+
+    <div class="callout tip">
+      <strong>✅ Самый простой способ:</strong>
+      Двойной клик на <code>download_history.bat</code> на рабочем столе или в папке проекта.
+    </div>
+
+    <p>Скрипт выполнит два шага:</p>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <strong>Загрузит 1-мин и 5-мин с T-Invest API</strong>
+          ~90 запросов на таймфрейм, 2–3 минуты. Показывает прогресс и размер файлов.
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <strong>Сгенерирует 15-мин и 1-час из 5-мин</strong>
+          Пересемплирование, занимает секунду. Файлы появятся в <code>data\history\</code>.
+        </div>
+      </div>
+    </div>
+
+    <div class="callout warn">
+      <strong>⚠️ Обновление истории</strong>
+      Запускай загрузчик повторно — он перезаписывает файлы. Актуальная история
+      всегда будет за последние 3 месяца от сегодняшней даты.
+    </div>
+  </section>
+
+  <!-- ── Добавить инструмент ───────────────────────────────────────────── -->
+  <section id="instruments">
+    <h2><span class="icon">➕</span>Добавить новый инструмент</h2>
+
+    <p>Открой <code>src\monitoring\download_history.py</code>, найди раздел <code>INSTRUMENTS</code>:</p>
+
+    <pre><code>INSTRUMENTS: dict[str, str] = {
+    <span class="str">"TATN":  "BBG004RVFFC0"</span>,   <span class="cm"># Татнефть обыкновенная</span>
+    <span class="str">"TATNP": "BBG004S68829"</span>,   <span class="cm"># Татнефть привилегированная</span>
+    <span class="cm"># Раскомментируй или добавь свой:</span>
+    <span class="cm"># "SBER":  "BBG004730N88",</span>
+    <span class="cm"># "SBERP": "BBG0047315Y7",</span>
+    <span class="cm"># "GOLD":  "&lt;FIGI&gt;",</span>
+}</code></pre>
+
+    <h3>Как найти FIGI</h3>
+    <table>
+      <thead><tr><th>Способ</th><th>Как</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>T-Invest API</td>
+          <td>Запрос <code>FindInstrument</code> по тикеру (TATN, SBER и т.д.)</td>
+        </tr>
+        <tr>
+          <td>Сайт Тинькофф</td>
+          <td>Страница инструмента → URL содержит FIGI</td>
+        </tr>
+        <tr>
+          <td>OpenFIGI</td>
+          <td>openfigi.com → поиск по ISIN или тикеру</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout info">
+      <strong>ℹ️ Бэктестер заточен под пару TATN/TATNP.</strong>
+      Для тестирования другой пары (SBER/SBERP) потребуется небольшая доработка кода
+      стратегии в <code>backtest.py</code>.
+    </div>
+  </section>
+
+  <!-- ── Запуск ────────────────────────────────────────────────────────── -->
+  <section id="launch">
+    <h2><span class="icon">🚀</span>Запуск бэктестера</h2>
+
+    <div class="callout tip">
+      <strong>✅ Двойной клик на MATS Backtester на рабочем столе</strong>
+      Откроется консоль и браузер на <strong>http://localhost:8502</strong>
+    </div>
+
+    <p>Если браузер не открылся — введи адрес вручную: <code>http://localhost:8502</code></p>
+
+    <div class="callout info">
+      Бэктестер и дашборд работают одновременно на разных портах:
+      Бэктестер — <strong>:8502</strong>, дашборд — <strong>:8501</strong>.
+    </div>
+
+    <div class="tab-cards">
+      <div class="tab-card">
+        <div class="tab-icon">📊</div>
+        <div class="tab-name">Бэктест</div>
+        <div class="tab-desc">Полный прогон стратегии на истории. Метрики, графики, анализ по сессиям.</div>
+      </div>
+      <div class="tab-card">
+        <div class="tab-icon">🔍</div>
+        <div class="tab-name">Оптимизатор</div>
+        <div class="tab-desc">Grid search по параметрам. Тепловые карты. Лучшая комбинация автоматически.</div>
+      </div>
+      <div class="tab-card">
+        <div class="tab-icon">🎮</div>
+        <div class="tab-name">Тренажёр</div>
+        <div class="tab-desc">Торговля на истории пошагово. Полуавтомат или полный автомат.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Сайдбар ───────────────────────────────────────────────────────── -->
+  <section id="sidebar">
+    <h2><span class="icon">⚙️</span>Параметры (боковая панель)</h2>
+
+    <h3>Источник данных</h3>
+    <table>
+      <thead><tr><th>Режим</th><th>Когда использовать</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>📡 <strong>T-Invest API</strong></td>
+          <td>Нужен интернет + токен. Любой диапазон дат онлайн.</td>
+        </tr>
+        <tr>
+          <td>💾 <strong>Локальный CSV</strong></td>
+          <td>Офлайн из скачанных файлов. Быстрее, не требует интернета.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Параметры</h3>
+    <table>
+      <thead><tr><th>Параметр</th><th>Описание</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Начало / Конец</strong></td><td>Диапазон дат для анализа</td></tr>
+        <tr><td><strong>Таймфрейм</strong></td><td>1, 5, 15, 60 мин — влияет на детализацию</td></tr>
+        <tr><td><strong>Депозит ₽</strong></td><td>Начальный капитал (для расчёта ROI, просадок)</td></tr>
+        <tr><td><strong>Лотов на сделку</strong></td><td>Фиксированное число лотов в бэктесте</td></tr>
+        <tr><td><strong>Слипадж ₽</strong></td><td>Ухудшение цены входа (моделирует рыночные ордера). Рекомендуется 0.2–0.5 ₽</td></tr>
+        <tr><td><strong>Cooldown, мин</strong></td><td>Пауза после закрытия — не входить N минут</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <strong>💡 Нажми «📥 Загрузить данные» после выбора параметров.</strong>
+      Данные кэшируются — при переключении между вкладками перезагружать не нужно.
+    </div>
+  </section>
+
+  <!-- ── Вкладка Бэктест ───────────────────────────────────────────────── -->
+  <section id="tab-bt">
+    <h2><span class="icon">📊</span>Вкладка «📊 Бэктест»</h2>
+
+    <p>Полный прогон стратегии на загруженной истории за один клик.</p>
+
+    <h3>Параметры стратегии</h3>
+    <table>
+      <thead><tr><th>Параметр</th><th>Описание</th><th>Рекомендуется</th></tr></thead>
+      <tbody>
+        <tr><td>Спред скальп ≥, ₽</td><td>Минимальный спред для сигнала LONG_SCALP</td><td>5.0</td></tr>
+        <tr><td>Ratio скальп ≥</td><td>Ratio (TATN/TATNP) для LONG_SCALP</td><td>1.008</td></tr>
+        <tr><td>Спред хороший ≥, ₽</td><td>Спред для сильного сигнала LONG_GOOD</td><td>7.0</td></tr>
+        <tr><td>Ratio хороший ≥</td><td>Ratio для LONG_GOOD</td><td>1.011</td></tr>
+        <tr><td>Стоп: доп. к спреду ₽</td><td>Стоп-лосс = спред_входа + N ₽</td><td>3.0</td></tr>
+        <tr><td>Тейк: спред схождения ₽</td><td>Тейк при сужении спреда до N ₽</td><td>0.5</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Метрики результатов</h3>
+    <table>
+      <thead><tr><th>Метрика</th><th>Что означает</th><th>Хороший результат</th></tr></thead>
+      <tbody>
+        <tr><td>Winrate</td><td>Доля прибыльных сделок</td><td>≥ 60%</td></tr>
+        <tr><td>ROI</td><td>Доходность на депозит</td><td>≥ 5% за период</td></tr>
+        <tr><td>Sharpe</td><td>Доходность / риск (стабильность)</td><td>≥ 1.5</td></tr>
+        <tr><td>Макс. просадка</td><td>Максимальное падение капитала</td><td>≤ 20%</td></tr>
+        <tr><td>Средний P&L</td><td>Средняя прибыль на сделку</td><td>&gt; 0</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Анализ по сессиям MOEX (внизу вкладки)</h3>
+    <p>Сравнивает утреннюю и вечернюю сессии. Ключевой вывод из урока 11б:</p>
+    <div class="callout warn">
+      <strong>⚠️ Урок 11б: спред расходится чаще на вечерней сессии (19:05–23:50 МСК).</strong>
+      Если вечерняя сессия значительно прибыльнее — концентрируй торговлю вечером.
+    </div>
+    <table>
+      <thead><tr><th>Сессия</th><th>Время МСК</th></tr></thead>
+      <tbody>
+        <tr><td>Утренняя</td><td>10:00 – 18:45</td></tr>
+        <tr><td>Вечерняя ⭐</td><td>19:05 – 23:50 (часто лучше)</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ── Вкладка Оптимизатор ───────────────────────────────────────────── -->
+  <section id="tab-opt">
+    <h2><span class="icon">🔍</span>Вкладка «🔍 Оптимизатор»</h2>
+
+    <p>Автоматически перебирает все комбинации параметров и находит лучшую.</p>
+
+    <h3>Процесс оптимизации</h3>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <strong>Задай диапазоны параметров</strong>
+          entry_scalp (мин/макс/шаг), stop_add, значения target.
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <strong>Выбери метрику оптимизации</strong>
+          Sharpe — стабильность, ROI — абсолютная доходность, Winrate — процент побед.
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <strong>Нажми «🔍 Запустить оптимизацию»</strong>
+          Прогресс-бар. Топ-10 комбинаций + тепловые карты.
+        </div>
+      </div>
+    </div>
+
+    <div class="callout tip">
+      <strong>💡 Стратегия оптимизации в 2 шага:</strong><br>
+      1. Широкий поиск с шагом 1.0 — находим область.<br>
+      2. Точный поиск с шагом 0.5 вокруг лучшей точки — уточняем параметры.
+    </div>
+
+    <div class="callout warn">
+      <strong>⚠️ Опасность переобучения (overfitting).</strong>
+      Найденные параметры работают хорошо на обучающем периоде.
+      Обязательно проверяй на <strong>другом периоде</strong> (out-of-sample).
+    </div>
+  </section>
+
+  <!-- ── Вкладка Тренажёр ──────────────────────────────────────────────── -->
+  <section id="tab-sim">
+    <h2><span class="icon">🎮</span>Вкладка «🎮 Тренажёр»</h2>
+
+    <p>Пошаговое воспроизведение торговли на реальной истории. График показывает только прошлое — будущего не видно.</p>
+
+    <h3>Режимы</h3>
+    <table>
+      <thead><tr><th>Режим</th><th>Кто входит</th><th>Кто выходит</th><th>Цель</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>🖐 <strong>Полуавтомат</strong></td>
+          <td>Ты (кнопка «✅ Войти»)</td>
+          <td>Алгоритм (TP/SL)</td>
+          <td>Тренировка психологии входа</td>
+        </tr>
+        <tr>
+          <td>🤖 <strong>Полный автомат</strong></td>
+          <td>Алгоритм (R/R ≥ 2)</td>
+          <td>Алгоритм (TP/SL)</td>
+          <td>Быстрая проверка логики</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Кнопки управления</h3>
+    <table>
+      <thead><tr><th>Кнопка</th><th>Действие</th><th>Режим</th></tr></thead>
+      <tbody>
+        <tr><td>▶ Следующая</td><td>Перейти к следующей свече</td><td>Оба</td></tr>
+        <tr><td>✅ Войти</td><td>Открыть позицию на текущем сигнале</td><td>Полуавтомат</td></tr>
+        <tr><td>⏭ Пропустить</td><td>Пропустить сигнал, перейти дальше</td><td>Полуавтомат</td></tr>
+        <tr><td>⏩ До конца</td><td>Прокрутить всю оставшуюся историю</td><td>Полный автомат</td></tr>
+        <tr><td>🔄 Сбросить</td><td>Начать тренажёр заново с нулевого баланса</td><td>Оба</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Что отображается на экране</h3>
+    <table>
+      <thead><tr><th>Элемент</th><th>Описание</th></tr></thead>
+      <tbody>
+        <tr><td>Свеча N / M</td><td>Текущая позиция в истории</td></tr>
+        <tr><td>Время</td><td>Дата и время текущей свечи</td></tr>
+        <tr><td>Спред</td><td>Текущий спред TATN − TATNP в рублях</td></tr>
+        <tr><td>Ratio</td><td>TATN / TATNP</td></tr>
+        <tr><td>Капитал</td><td>Текущий баланс с дельтой от старта</td></tr>
+        <tr><td>Сигнал</td><td>Цветной индикатор + описание</td></tr>
+        <tr><td>Параметры входа</td><td>Лотов, комиссия, потенциал, риск, R/R</td></tr>
+        <tr><td>Позиция</td><td>Спред входа, уровни тейка/стопа, P&L сейчас</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ── Сигналы ───────────────────────────────────────────────────────── -->
+  <section id="signals">
+    <h2><span class="icon">📡</span>Сигналы стратегии ТАТки</h2>
+
+    <table>
+      <thead><tr><th>Сигнал</th><th>Условие</th><th>Действие</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><span class="signal"><span class="dot green"></span>LONG_GOOD</span></td>
+          <td>Спред ≥ 7 ₽ <strong>И</strong> Ratio ≥ 1.011</td>
+          <td>Сильный вход — приоритет</td>
+        </tr>
+        <tr>
+          <td><span class="signal"><span class="dot yellow"></span>LONG_SCALP</span></td>
+          <td>Спред ≥ 5 ₽ <strong>И</strong> Ratio ≥ 1.008</td>
+          <td>Скальп-вход — при R/R ≥ 2</td>
+        </tr>
+        <tr>
+          <td><span class="signal"><span class="dot grey"></span>ALERT</span></td>
+          <td>Спред ≥ 2.5 ₽</td>
+          <td>Наблюдать, готовить заявки</td>
+        </tr>
+        <tr>
+          <td><span class="signal"><span class="dot red"></span>EXIT</span></td>
+          <td>Спред ≤ 0.5 ₽</td>
+          <td>Линии сошлись — закрывать!</td>
+        </tr>
+        <tr>
+          <td><span class="signal"><span class="dot red"></span>TAKE_PROFIT</span></td>
+          <td>Спред ≥ 20 ₽</td>
+          <td>Зона выхода на среднесрочке</td>
+        </tr>
+        <tr>
+          <td><span class="signal"><span class="dot red"></span>STRONG_LONG</span></td>
+          <td>Ratio &lt; 1.0 (прив. дороже обычки)</td>
+          <td>Аномалия — сильный вход</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout info">
+      <strong>ℹ️ Фильтр R/R ≥ 2.0</strong><br>
+      Алгоритм не входит, если расчётное соотношение риск/прибыль меньше 2:1,
+      даже при наличии сигнала. Это ключевой фильтр для отсева плохих входов.
+    </div>
+  </section>
+
+  <!-- ── Советы ────────────────────────────────────────────────────────── -->
+  <section id="tips">
+    <h2><span class="icon">💡</span>Советы по работе</h2>
+
+    <div class="callout tip">
+      <strong>1. Workflow: Оптимизатор → проверка → Тренажёр</strong>
+      Сначала найди параметры через Оптимизатор на 2 месяцах → проверь на третьем месяце →
+      потренируйся в Тренажёре с этими параметрами.
+    </div>
+
+    <div class="callout tip">
+      <strong>2. Вечерняя сессия прибыльнее</strong>
+      Если анализ сессий показывает преимущество вечера — фильтруй данные
+      (Фильтр от 19:00 до 23:59) и тестируй отдельно.
+    </div>
+
+    <div class="callout tip">
+      <strong>3. Слипадж 0.2–0.5 ₽ даёт реалистичную картину</strong>
+      Рыночные ордера на ТАТках в стакане двигают цену на 0.1–0.3 ₽.
+      Без слиппажа результаты будут завышены.
+    </div>
+
+    <div class="callout warn">
+      <strong>4. Не торгуй реальными деньгами только по бэктесту</strong>
+      Бэктест не учитывает: ликвидность стакана, проскальзывание при крупных объёмах,
+      задержки исполнения, новостные гэпы. Тренажёр ближе к реальности.
+    </div>
+  </section>
+
+  <!-- ── FAQ ───────────────────────────────────────────────────────────── -->
+  <section id="faq">
+    <h2><span class="icon">❓</span>Частые вопросы</h2>
+
+    <details>
+      <summary>Сколько хранится история в CSV-файлах?</summary>
+      <div class="faq-body">
+        <p>По умолчанию 3 месяца от сегодняшней даты. Чтобы изменить — открой
+        <code>src\monitoring\download_history.py</code> и измени:</p>
+        <pre><code>MONTHS_BACK = <span class="num">3</span>  <span class="cm"># измени на 6 для полугода</span></code></pre>
+        <p>Учти: 6 месяцев 1-мин данных = ~180 запросов к API, ~5–7 минут загрузки.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>Почему мало данных при 1-мин таймфрейме?</summary>
+      <div class="faq-body">
+        <p>T-Invest API отдаёт максимум 1 день за запрос на минутных таймфреймах.
+        Загрузчик делает ~90 запросов за 3 месяца — это нормально, просто занимает время.
+        Следи за прогрессом в консоли.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>Можно ли добавить данные к существующим (не перезаписывать)?</summary>
+      <div class="faq-body">
+        <p>Пока нет — загрузчик перезаписывает файлы полностью.
+        Просто запускай <code>download_history.bat</code> раз в месяц — получишь
+        актуальную историю за последние 3 месяца.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>Бэктестер показывает «Нет данных» при загрузке из CSV</summary>
+      <div class="faq-body">
+        <p>Проверь:</p>
+        <p>1. Файлы существуют в <code>data\history\</code> — запусти <code>download_history.bat</code>.</p>
+        <p>2. В бэктестере выбран источник «💾 Локальный CSV».</p>
+        <p>3. Фильтр дат не выходит за пределы данных в файле.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>Как тестировать другую пару (SBER/SBERP, GAZP)?</summary>
+      <div class="faq-body">
+        <p>1. Добавь тикеры в <code>download_history.py</code> → <code>INSTRUMENTS</code>.</p>
+        <p>2. Запусти загрузчик — файлы появятся в <code>data\history\</code>.</p>
+        <p>3. В <code>backtest.py</code> потребуется небольшая доработка:
+        изменить пороги сигналов (спред, ratio) под характеристики новой пары.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>Бэктестер и дашборд конфликтуют между собой?</summary>
+      <div class="faq-body">
+        <p>Нет — они работают на разных портах: бэктестер на <strong>:8502</strong>,
+        дашборд на <strong>:8501</strong>. Можно запускать оба одновременно.</p>
+      </div>
+    </details>
+  </section>
+
+  <footer>
+    MATS — MOEX Arbitrage Trading System &nbsp;·&nbsp;
+    C:\Users\profi\Documents\Project\arbitrag-strategy\
+  </footer>
+
+</main>
+</body>
+</html>
