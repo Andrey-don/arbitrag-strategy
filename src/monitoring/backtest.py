@@ -32,6 +32,8 @@ _TF_MAP = {
     15: "CANDLE_INTERVAL_15_MIN",
     60: "CANDLE_INTERVAL_HOUR",
 }
+# Максимум дней за один запрос к T-Invest API (иначе пустой ответ)
+_TF_CHUNK = {1: 1, 5: 1, 10: 1, 15: 1, 60: 7}
 
 # ---------------------------------------------------------------------------
 # T-Invest API
@@ -42,37 +44,38 @@ def _headers() -> dict:
 def _q2f(q: dict) -> float:
     return float(q.get("units", 0)) + q.get("nano", 0) / 1_000_000_000
 
-def get_candles(ticker: str, days: int, interval: int) -> pd.DataFrame:
+def get_candles(ticker: str, from_dt: datetime, to_dt: datetime, interval: int) -> pd.DataFrame:
     figi = FIGI.get(ticker)
     if not figi or not TINKOFF_TOKEN:
         return pd.DataFrame()
-    to_dt   = datetime.now(timezone.utc)
-    from_dt = to_dt - timedelta(days=days)
-    try:
-        r = requests.post(
-            f"{_TINVEST_BASE}/tinkoff.public.invest.api.contract.v1.MarketDataService/GetCandles",
-            json={
-                "figi":     figi,
-                "from":     from_dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "to":       to_dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "interval": _TF_MAP.get(interval, "CANDLE_INTERVAL_5_MIN"),
-            },
-            headers=_headers(),
-            timeout=20,
-        )
-        candles = r.json().get("candles", [])
-        if not candles:
-            return pd.DataFrame()
-        rows = []
-        for c in candles:
-            close = _q2f(c["close"])
-            if close == 0:
-                continue
-            ts = pd.to_datetime(c["time"]) + timedelta(hours=3)
-            rows.append({"begin": ts.replace(tzinfo=None), "close": close})
-        return pd.DataFrame(rows)
-    except Exception:
-        return pd.DataFrame()
+    chunk = timedelta(days=_TF_CHUNK.get(interval, 1))
+    all_rows: list[dict] = []
+    cur = from_dt.replace(tzinfo=timezone.utc) if from_dt.tzinfo is None else from_dt
+    end = to_dt.replace(tzinfo=timezone.utc)   if to_dt.tzinfo   is None else to_dt
+    while cur < end:
+        cur_to = min(cur + chunk, end)
+        try:
+            r = requests.post(
+                f"{_TINVEST_BASE}/tinkoff.public.invest.api.contract.v1.MarketDataService/GetCandles",
+                json={
+                    "figi":     figi,
+                    "from":     cur.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "to":       cur_to.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "interval": _TF_MAP.get(interval, "CANDLE_INTERVAL_5_MIN"),
+                },
+                headers=_headers(),
+                timeout=20,
+            )
+            for c in r.json().get("candles", []):
+                close = _q2f(c["close"])
+                if close == 0:
+                    continue
+                ts = pd.to_datetime(c["time"]) + timedelta(hours=3)
+                all_rows.append({"begin": ts.replace(tzinfo=None), "close": close})
+        except Exception:
+            pass
+        cur = cur_to
+    return pd.DataFrame(all_rows) if all_rows else pd.DataFrame()
 
 # ---------------------------------------------------------------------------
 # Движок бэктеста
@@ -303,10 +306,14 @@ with st.sidebar:
     st.header("⚙️ Параметры")
 
     st.subheader("Данные")
-    days = st.selectbox("История", [3, 5, 10, 30, 60], index=1,
-                        format_func=lambda x: f"{x} дн.")
-    tf   = st.selectbox("Таймфрейм", [1, 5, 10, 15, 60], index=1,
-                        format_func=lambda x: f"{x} мин")
+    _today    = datetime.now().date()
+    _default_from = _today - timedelta(days=30)
+    date_from = st.date_input("Начало", value=_default_from, max_value=_today)
+    date_to   = st.date_input("Конец",  value=_today,        max_value=_today)
+    tf        = st.selectbox("Таймфрейм", [1, 5, 10, 15, 60], index=1,
+                             format_func=lambda x: f"{x} мин")
+    if date_from >= date_to:
+        st.warning("Начало должно быть раньше конца.")
     st.divider()
 
     st.subheader("Общие")
@@ -322,11 +329,17 @@ with st.sidebar:
 # Загрузка данных (в session_state)
 # ---------------------------------------------------------------------------
 if load_btn:
-    with st.spinner(f"Загружаю свечи за {days} дн. ({tf} мин)..."):
-        df_t  = get_candles("TATN",  days=days, interval=tf)
-        df_tp = get_candles("TATNP", days=days, interval=tf)
+    if date_from >= date_to:
+        st.error("Начало должно быть раньше конца.")
+        st.stop()
+    _from_dt = datetime(date_from.year, date_from.month, date_from.day)
+    _to_dt   = datetime(date_to.year,   date_to.month,   date_to.day, 23, 59, 59)
+    _days    = (date_to - date_from).days
+    with st.spinner(f"Загружаю свечи {date_from} — {date_to} ({tf} мин)..."):
+        df_t  = get_candles("TATN",  from_dt=_from_dt, to_dt=_to_dt, interval=tf)
+        df_tp = get_candles("TATNP", from_dt=_from_dt, to_dt=_to_dt, interval=tf)
     if df_t.empty or df_tp.empty:
-        st.error("Нет данных. Проверьте TINKOFF_TOKEN в .env.")
+        st.error("Нет данных. Проверьте TINKOFF_TOKEN в .env и выбранный диапазон.")
         st.stop()
     df_merged = (
         pd.merge(df_t, df_tp, on="begin", suffixes=("_tatn", "_tatnp"))
@@ -334,9 +347,10 @@ if load_btn:
     )
     df_merged["spread"]  = df_merged["close_tatn"] - df_merged["close_tatnp"]
     df_merged["ratio_h"] = df_merged["close_tatn"]  / df_merged["close_tatnp"]
-    st.session_state["df"]   = df_merged
-    st.session_state["days"] = days
-    st.session_state["tf"]   = tf
+    st.session_state["df"]        = df_merged
+    st.session_state["date_from"] = str(date_from)
+    st.session_state["date_to"]   = str(date_to)
+    st.session_state["tf"]        = tf
 
 if "df" not in st.session_state:
     st.info("Нажмите **📥 Загрузить данные** в боковой панели.")
