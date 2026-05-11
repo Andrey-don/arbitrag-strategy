@@ -1,5 +1,5 @@
 ---
-updated: 2026-05-11 (walk-forward + режимный фильтр + анализ таймфреймов + статистика сделок)
+updated: 2026-05-11 (бот скелет: режимный фильтр + стратегия + Order Executor)
 ---
 
 # SESSION BRIEF — Арбитражный бот (читать первым)
@@ -11,8 +11,8 @@ updated: 2026-05-11 (walk-forward + режимный фильтр + анализ
 
 ## Текущая задача
 
-**Walk-Forward тест SBER/SBERP — ЗАВЕРШЁН ✅**
-Следующий шаг: добавить режимный фильтр в торговый бот (src/).
+**Бот скелет (src/) — ЗАВЕРШЁН ✅**
+Следующий шаг: тест на живых котировках (DRY_RUN + реальный токен T-Invest).
 
 ---
 
@@ -30,14 +30,38 @@ updated: 2026-05-11 (walk-forward + режимный фильтр + анализ
 | SBER/SBERP — протестировано, стратегия работает (2026) | ✅ 149 сделок, WR 100%, Sharpe 57 |
 | Скрининг 6 пар на арбитражность | ✅ Завершено (итог ниже) |
 | SBER/SBERP walk-forward тест 2024→2025→2026 | ✅ Завершено |
-| Режимный фильтр rolling_mean в боте (src/) | 🎯 Следующее |
-| Разработка торгового бота (src/) | ⬜ Не начато |
+| Режимный фильтр rolling_mean в боте (src/) | ✅ Готов |
+| Бот скелет: config + api + strategy + executor | ✅ Готов (850 строк, 8 файлов) |
+| Тест на живых котировках (DRY_RUN) | 🎯 Следующее |
+| Реальная торговля (DRY_RUN=false) | ⬜ После тестирования |
 
 ---
 
 ## Что сделано в последней сессии (2026-05-11)
 
-### 0. Walk-Forward тест + режимный фильтр — итог
+### 0. Бот скелет — 8 файлов, 850 строк
+
+**Запуск:** `start_bot.bat` (или `python -m src.bot`)
+
+| Файл | Назначение |
+|------|-----------|
+| `src/utils/config.py` | BotConfig — все пороги из walk-forward, DRY_RUN из .env |
+| `src/utils/tinvest_api.py` | T-Invest REST API враппер |
+| `src/strategies/regime_filter.py` | Режимный фильтр: `\|rolling_mean(20д)\| > 0.40₽ → блок` |
+| `src/strategies/pair_strategy.py` | Стратегия: ENTRY_SCALP/GOOD + EXIT_TP/SL |
+| `src/data/fetcher.py` | Данные: офлайн CSV → онлайн API |
+| `src/risk/risk_manager.py` | Просадка 20% → остановка |
+| `src/execution/order_executor.py` | Параллельные ноги + серверный стоп после входа |
+| `src/bot.py` | Главный цикл: инициализация из истории, синхр. к свечам |
+
+**Тесты пройдены:**
+- Офлайн история загружается: 1511 точек за 20д → фильтр `mean=-0.297₽ 🟢 OK`
+- Сигналы: NONE / ENTRY_SCALP / ENTRY_GOOD / EXIT_TP / EXIT_SL — всё корректно
+- DRY_RUN вход: позиция создаётся, лог пишется в `logs/trades.csv`
+
+---
+
+### 1. Walk-Forward тест + режимный фильтр — итог
 
 **Скрипт:** `src/monitoring/walkforward_sber.py`
 
@@ -201,6 +225,7 @@ MTLRP       BBG004S68FR6   Мечел привилегированная     (п
 
 | Файл | Запуск | Порт |
 |------|--------|------|
+| `src/bot.py` | `start_bot.bat` / `python -m src.bot` | — |
 | `src/monitoring/backtest.py` | `start_backtester.bat` | 8502 |
 | `src/monitoring/dashboard.py` | `start_dashboard.bat` | 8501 |
 | `src/monitoring/download_history.py` | `python ... --from YYYY-MM-DD` | — |
